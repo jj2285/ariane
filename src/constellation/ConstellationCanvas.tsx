@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback } from 'react';;
 import type { ConstellationData, RuntimeNode, RuntimeEdge } from './types';
 import { computeLayout } from './layout';
 import { COLORS, NODE_RADIUS } from './colors';
@@ -56,7 +56,6 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
   const frameRef = useRef<((ts: number) => void) | null>(null);
   const rafRef = useRef<number>(0);
   const prevTsRef = useRef<number>(0);
-  const [, forceUpdate] = useState(0);
 
   // Sync props into state ref
   useEffect(() => {

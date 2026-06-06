@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';;
 import { ConstellationCanvas } from './ConstellationCanvas';
 import { InfoPanel } from './InfoPanel';
 import { Intro } from './Intro';
@@ -12,7 +12,7 @@ export function ConstellationApp() {
   const [showInfo, setShowInfo] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [introActive, setIntroActive] = useState(() => !isIntroDone());
-  const [introStep, setIntroStep] = useState(0);
+  const [introStep] = useState(0);
 
   const activeNode: RuntimeNode | null = focusId
     ? (data.nodes.find(n => n.id === focusId) as RuntimeNode | undefined) ?? null

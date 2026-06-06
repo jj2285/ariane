@@ -8,12 +8,6 @@ interface Props {
   onComplete: () => void;
 }
 
-interface Step {
-  title?: string;
-  lines: string[];
-  spotlight?: 'wide' | 'tight' | 'medium';
-}
-
 export function Intro({ nodeCount, edgeCount, pillarNames, onComplete }: Props) {
   const [step, setStep] = useState(0);
   const [typeText, setTypeText] = useState('');
