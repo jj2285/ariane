@@ -1,18 +1,20 @@
 export interface NodeData {
   id: string;
   label: string;
-  type: 'hub' | 'pillar' | 'subtheme' | 'indie';
+  type: 'hub' | 'pillar' | 'subtheme' | 'indie' | 'company' | 'person';
   parentId?: string;
-  depth: number; // 0=hub, 1=pillar, 2=subtheme, 3+
+  depth: number;
   // Panel content
   title: string;
   body: string;
   stat?: string;
   statLabel?: string;
   worksUrl?: string;
-  // Runtime layout (set by layout engine)
-  angle?: number;  // radians
-  radius?: number; // px from center
+  // Person-specific fields
+  personPosition?: string;
+  personEmail?: string;
+  personPhone?: string;
+  personCompany?: string;
 }
 
 export interface EdgeData {
@@ -27,17 +29,16 @@ export interface ConstellationData {
   edges: EdgeData[];
 }
 
-// Runtime node with computed position
 export interface RuntimeNode extends NodeData {
-  x: number; // canvas coords relative to center
+  x: number;
   y: number;
-  phase: number; // oscillation phase offset
+  phase: number;
   visible: boolean;
-  scale: number; // for animation
+  scale: number;
   opacity: number;
 }
 
 export interface RuntimeEdge extends EdgeData {
   visible: boolean;
-  particleT: number; // 0–1 along the path
+  particleT: number;
 }

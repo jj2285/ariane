@@ -6,6 +6,61 @@ interface Props {
   onClose: () => void;
 }
 
+const TYPE_LABELS: Record<string, string> = {
+  hub: 'HUB',
+  pillar: 'PILIER',
+  indie: 'THÈME INDÉPENDANT',
+  subtheme: 'SOUS-THÈME',
+  company: 'ENTREPRISE',
+  person: 'CONTACT',
+};
+
+const TYPE_COLORS: Record<string, { bg: string; border: string; text: string; accent: string }> = {
+  hub:     { bg: '#f0fdf4', border: '#a7f3d0', text: '#064e3b', accent: '#059669' },
+  pillar:  { bg: '#f0fdf4', border: '#a7f3d0', text: '#064e3b', accent: '#059669' },
+  indie:   { bg: '#f0fdf4', border: '#a7f3d0', text: '#064e3b', accent: '#059669' },
+  subtheme:{ bg: '#f0fdf4', border: '#a7f3d0', text: '#064e3b', accent: '#059669' },
+  company: { bg: '#eff6ff', border: '#bfdbfe', text: '#1e40af', accent: '#2563eb' },
+  person:  { bg: '#fff7ed', border: '#fed7aa', text: '#9a3412', accent: '#ea580c' },
+};
+
+function Avatar({ name }: { name: string }) {
+  const parts = name.trim().split(' ');
+  const initials = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : name.slice(0, 2).toUpperCase();
+
+  return (
+    <div style={{
+      width: 56,
+      height: 56,
+      borderRadius: '50%',
+      background: '#fff7ed',
+      border: '2.5px solid #fb923c',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: 20,
+      fontWeight: 700,
+      color: '#c2410c',
+      flexShrink: 0,
+    }}>
+      {initials}
+    </div>
+  );
+}
+
+function ContactRow({ icon, value, href }: { icon: string; value: string; href?: string }) {
+  const content = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ fontSize: 13, width: 18, textAlign: 'center' }}>{icon}</span>
+      <span style={{ fontSize: 12, color: '#374151' }}>{value}</span>
+    </div>
+  );
+  if (href) return <a href={href} style={{ textDecoration: 'none' }}>{content}</a>;
+  return content;
+}
+
 export function InfoPanel({ node, onClose }: Props) {
   const [displayed, setDisplayed] = useState<RuntimeNode | null>(null);
   const [animKey, setAnimKey] = useState(0);
@@ -19,25 +74,28 @@ export function InfoPanel({ node, onClose }: Props) {
 
   if (!displayed) return null;
 
+  const colors = TYPE_COLORS[displayed.type] ?? TYPE_COLORS.subtheme;
+  const isPerson = displayed.type === 'person';
+  const isCompany = displayed.type === 'company';
+  const panelBorder = isPerson ? '#fed7aa' : isCompany ? '#bfdbfe' : '#d1fae5';
+
   return (
-    <div
-      style={{
-        position: 'absolute',
-        top: 0,
-        right: 0,
-        width: 300,
-        height: '100%',
-        background: 'rgba(255,255,255,0.97)',
-        borderLeft: '1px solid #d1fae5',
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '24px 20px',
-        boxSizing: 'border-box',
-        backdropFilter: 'blur(8px)',
-        overflowY: 'auto',
-        zIndex: 10,
-      }}
-    >
+    <div style={{
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      width: 300,
+      height: '100%',
+      background: 'rgba(255,255,255,0.97)',
+      borderLeft: `1px solid ${panelBorder}`,
+      display: 'flex',
+      flexDirection: 'column',
+      padding: '24px 20px',
+      boxSizing: 'border-box',
+      backdropFilter: 'blur(8px)',
+      overflowY: 'auto',
+      zIndex: 10,
+    }}>
       <button
         onClick={onClose}
         style={{
@@ -48,7 +106,7 @@ export function InfoPanel({ node, onClose }: Props) {
           border: 'none',
           cursor: 'pointer',
           fontSize: 18,
-          color: '#6ee7b7',
+          color: '#9ca3af',
           lineHeight: 1,
         }}
         aria-label="Fermer"
@@ -62,78 +120,129 @@ export function InfoPanel({ node, onClose }: Props) {
           fontWeight: 600,
           letterSpacing: '0.1em',
           textTransform: 'uppercase',
-          color: '#34d399',
-          background: '#f0fdf4',
+          color: colors.accent,
+          background: colors.bg,
           padding: '2px 8px',
           borderRadius: 4,
-          border: '1px solid #a7f3d0',
+          border: `1px solid ${colors.border}`,
         }}>
-          {displayed.type === 'hub' ? 'HUB' :
-           displayed.type === 'pillar' ? 'PILIER' :
-           displayed.type === 'indie' ? 'THÈME INDÉPENDANT' : 'SOUS-THÈME'}
+          {TYPE_LABELS[displayed.type] ?? displayed.type}
         </span>
 
-        <h2 style={{
-          marginTop: 12,
-          marginBottom: 8,
-          fontSize: 17,
-          fontWeight: 700,
-          color: '#064e3b',
-          lineHeight: 1.3,
-        }}>
-          {displayed.title}
-        </h2>
+        {/* ── FICHE PERSONNE ─────────────────────────────── */}
+        {isPerson ? (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16, marginBottom: 14 }}>
+              <Avatar name={displayed.title} />
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#111827', lineHeight: 1.2 }}>
+                  {displayed.title}
+                </div>
+                <div style={{ fontSize: 12, color: '#ea580c', fontWeight: 600, marginTop: 3 }}>
+                  {displayed.personPosition}
+                </div>
+                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+                  {displayed.personCompany}
+                </div>
+              </div>
+            </div>
 
-        <p style={{
-          fontSize: 13,
-          color: '#374151',
-          lineHeight: 1.6,
-          margin: '0 0 20px',
-        }}>
-          {displayed.body}
-        </p>
+            <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, margin: '0 0 16px' }}>
+              {displayed.body}
+            </p>
 
-        {displayed.stat && (
-          <div style={{
-            background: '#f0fdf4',
-            border: '1px solid #a7f3d0',
-            borderRadius: 8,
-            padding: '14px 16px',
-            marginBottom: 20,
-          }}>
+            {/* Bloc contact */}
             <div style={{
-              fontSize: 28,
-              fontWeight: 700,
-              color: '#059669',
-              fontFamily: 'Georgia, serif',
-              lineHeight: 1,
+              background: '#fff7ed',
+              border: '1px solid #fed7aa',
+              borderRadius: 8,
+              padding: '12px 14px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              marginBottom: 16,
             }}>
-              {displayed.stat}
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#ea580c', letterSpacing: '0.08em', marginBottom: 4 }}>
+                CONTACT
+              </div>
+              {displayed.personEmail && (
+                <ContactRow icon="✉" value={displayed.personEmail} href={`mailto:${displayed.personEmail}`} />
+              )}
+              {displayed.personPhone && (
+                <ContactRow icon="☎" value={displayed.personPhone} href={`tel:${displayed.personPhone}`} />
+              )}
             </div>
-            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
-              {displayed.statLabel}
-            </div>
-          </div>
-        )}
 
-        {displayed.worksUrl && (
-          <a
-            href={displayed.worksUrl}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              fontSize: 12,
-              fontWeight: 600,
-              color: '#059669',
-              textDecoration: 'none',
-              border: '1px solid #34d399',
-              padding: '6px 14px',
-              borderRadius: 6,
-            }}
-          >
-            Voir nos travaux →
-          </a>
+            {displayed.stat && (
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                <span style={{ fontSize: 22, fontWeight: 700, color: '#ea580c', fontFamily: 'Georgia, serif' }}>
+                  {displayed.stat}
+                </span>
+                <span style={{ fontSize: 11, color: '#6b7280' }}>{displayed.statLabel}</span>
+              </div>
+            )}
+          </>
+        ) : (
+          /* ── FICHE STANDARD (hub, pillar, subtheme, company, indie) ── */
+          <>
+            <h2 style={{
+              marginTop: 12,
+              marginBottom: 8,
+              fontSize: 17,
+              fontWeight: 700,
+              color: colors.text,
+              lineHeight: 1.3,
+            }}>
+              {displayed.title}
+            </h2>
+
+            <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, margin: '0 0 20px' }}>
+              {displayed.body}
+            </p>
+
+            {displayed.stat && (
+              <div style={{
+                background: colors.bg,
+                border: `1px solid ${colors.border}`,
+                borderRadius: 8,
+                padding: '14px 16px',
+                marginBottom: 20,
+              }}>
+                <div style={{
+                  fontSize: 28,
+                  fontWeight: 700,
+                  color: colors.accent,
+                  fontFamily: 'Georgia, serif',
+                  lineHeight: 1,
+                }}>
+                  {displayed.stat}
+                </div>
+                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
+                  {displayed.statLabel}
+                </div>
+              </div>
+            )}
+
+            {displayed.worksUrl && (
+              <a
+                href={displayed.worksUrl}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: colors.accent,
+                  textDecoration: 'none',
+                  border: `1px solid ${colors.border}`,
+                  padding: '6px 14px',
+                  borderRadius: 6,
+                }}
+              >
+                Voir nos travaux →
+              </a>
+            )}
+          </>
         )}
       </div>
     </div>

@@ -16,26 +16,41 @@ export const COLORS = {
   },
   indie: {
     fill: '#f0fdf4',
-    stroke: '#86efac',
+    stroke: '#22c55e',
     text: '#166534',
-    strokeColor: '#22c55e',
+  },
+  company: {
+    fill: '#eff6ff',
+    stroke: '#60a5fa',
+    text: '#1e40af',
+  },
+  person: {
+    fill: '#fff7ed',
+    stroke: '#fb923c',
+    text: '#9a3412',
+    initials: '#c2410c',
   },
   edge: {
     stroke: 'rgba(52,211,153,0.35)',
     particle: '#34d399',
     label: 'rgba(52,211,153,0.7)',
   },
+  personEdge: {
+    stroke: 'rgba(251,146,60,0.4)',
+    particle: '#fb923c',
+    label: 'rgba(251,146,60,0.75)',
+  },
   focus: {
     dimOpacity: 0.12,
-    brightStroke: '#6ee7b7',
   },
   halo: 'rgba(20,184,166,0.08)',
 };
 
-// Node radius by type
 export const NODE_RADIUS: Record<string, number> = {
   hub: 40,
   pillar: 30,
   subtheme: 22,
   indie: 24,
+  company: 26,
+  person: 18,
 };

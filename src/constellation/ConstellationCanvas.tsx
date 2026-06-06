@@ -247,10 +247,13 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
         ? (connectedIds.has(e.sourceId) && connectedIds.has(e.targetId) ? 0.8 : 0.05)
         : 0.4;
 
+      const isPersonEdge = src.type === 'person' && tgt.type === 'person';
+      const edgeColor = isPersonEdge ? COLORS.personEdge : COLORS.edge;
+
       ctx.save();
       ctx.globalAlpha = edgeOpacity;
-      ctx.strokeStyle = COLORS.edge.stroke;
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = edgeColor.stroke;
+      ctx.lineWidth = isPersonEdge ? 1.2 : 1.5;
       ctx.setLineDash([5, 6]);
       ctx.beginPath();
       ctx.moveTo(ox, oy);
@@ -264,7 +267,7 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
       const p2 = bezierPoint(arrowT + 0.05, ox, oy, cx, cy, tx, ty);
       const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
       const aLen = 8;
-      ctx.strokeStyle = COLORS.edge.stroke;
+      ctx.strokeStyle = edgeColor.stroke;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(tx, ty);
@@ -276,7 +279,7 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
       // Particle
       const pt = bezierPoint(e.particleT, ox, oy, cx, cy, tx, ty);
       ctx.globalAlpha = edgeOpacity * 0.9;
-      ctx.fillStyle = COLORS.edge.particle;
+      ctx.fillStyle = edgeColor.particle;
       ctx.beginPath();
       ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
       ctx.fill();
@@ -284,7 +287,7 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
       // Edge label at midpoint
       const lpt = bezierPoint(0.45, ox, oy, cx, cy, tx, ty);
       ctx.globalAlpha = edgeOpacity * 0.85;
-      ctx.fillStyle = COLORS.edge.label;
+      ctx.fillStyle = edgeColor.label;
       ctx.font = '9px system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -295,7 +298,7 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
 
     // Hub–pillar lines (tree edges)
     for (const n of st.nodes) {
-      if (n.type !== 'pillar' && n.type !== 'subtheme') continue;
+      if (n.type !== 'pillar' && n.type !== 'subtheme' && n.type !== 'company' && n.type !== 'person') continue;
       if (!n.parentId) continue;
       const parent = st.nodes.find(p => p.id === n.parentId);
       if (!parent || !parent.visible || !n.visible) continue;
@@ -307,9 +310,10 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
 
       const op = Math.min(nodeOpacity(n.id), nodeOpacity(parent.id));
 
+      const isPersonLink = n.type === 'person' || (st.nodes.find(x => x.id === n.parentId)?.type === 'person');
       ctx.save();
       ctx.globalAlpha = op * 0.25 * n.opacity;
-      ctx.strokeStyle = '#34d399';
+      ctx.strokeStyle = isPersonLink ? '#fb923c' : (n.type === 'company' ? '#60a5fa' : '#34d399');
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(px, py);
@@ -341,7 +345,7 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
 
     // --- Draw nodes ---
     const sortedNodes = [...st.nodes].sort((a, b) => {
-      const order: Record<string, number> = { hub: 3, pillar: 2, subtheme: 1, indie: 1 };
+      const order: Record<string, number> = { hub: 5, pillar: 4, subtheme: 3, indie: 3, company: 2, person: 1 };
       return (order[a.type] ?? 0) - (order[b.type] ?? 0);
     });
 
@@ -432,6 +436,54 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
         } else {
           ctx.fillText(n.label, 0, 0);
         }
+
+      } else if (n.type === 'company') {
+        // Company: rounded rect style with blue tones
+        ctx.fillStyle = COLORS.company.fill;
+        ctx.beginPath();
+        ctx.arc(0, 0, finalR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = COLORS.company.stroke;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Small building icon hint (2 rectangles)
+        ctx.fillStyle = COLORS.company.stroke;
+        ctx.fillRect(-finalR * 0.22, -finalR * 0.1, finalR * 0.18, finalR * 0.25);
+        ctx.fillRect(finalR * 0.04, -finalR * 0.2, finalR * 0.22, finalR * 0.35);
+
+        ctx.fillStyle = COLORS.company.text;
+        ctx.font = `700 ${Math.round(finalR * 0.32)}px system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const cWords = n.label.split(' ');
+        if (cWords.length > 1) {
+          ctx.fillText(cWords[0], 0, -finalR * 0.55);
+          ctx.fillText(cWords.slice(1).join(' '), 0, -finalR * 0.3);
+        } else {
+          ctx.fillText(n.label, 0, -finalR * 0.45);
+        }
+
+      } else if (n.type === 'person') {
+        // Person: circle with initials
+        ctx.fillStyle = COLORS.person.fill;
+        ctx.beginPath();
+        ctx.arc(0, 0, finalR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = COLORS.person.stroke;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Initials
+        const parts = n.title.split(' ');
+        const initials = parts.length >= 2
+          ? (parts[0][0] + parts[1][0]).toUpperCase()
+          : n.title.slice(0, 2).toUpperCase();
+        ctx.fillStyle = COLORS.person.initials;
+        ctx.font = `700 ${Math.round(finalR * 0.52)}px system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(initials, 0, 0);
 
       } else {
         // subtheme
