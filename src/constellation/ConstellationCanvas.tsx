@@ -77,10 +77,16 @@ export function ConstellationCanvas({ data, scopeId, selectedId, macroMode, onNo
     stRef.current.allNodes = data.nodes;
     stRef.current.edges = data.edges.map(e => ({ ...e, visible: true, particleT: Math.random() }));
 
-    // Reset framing on every drill so the level is centered.
-    stRef.current.zoom = 1;
+    // Auto-fit: compute zoom so the outermost nodes sit comfortably in the viewport.
     stRef.current.panX = 0;
     stRef.current.panY = 0;
+    const maxExtent = rNodes.reduce((m, n) => Math.max(m, Math.abs(n.x), Math.abs(n.y)), 0);
+    if (maxExtent > 0) {
+      const halfView = Math.min(canvas.offsetWidth, canvas.offsetHeight) / 2 * 0.84;
+      stRef.current.zoom = Math.min(1.6, Math.max(0.45, halfView / maxExtent));
+    } else {
+      stRef.current.zoom = 1;
+    }
 
     const showAt = (id: string, delay: number) => {
       setTimeout(() => {

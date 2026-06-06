@@ -113,9 +113,26 @@ export function computeScopedLayout(
   const scope = byId.get(scopeId);
   if (!scope) return [];
 
-  const R1 = D * 0.30;
-  const R2 = D * 0.52;
-  const GRAND_FAN = (28 * Math.PI) / 180; // half-spread of grandchildren
+  // Ring 1 — direct children (+ indie themes when at the hub)
+  let children = (childrenOf.get(scopeId) ?? []).slice();
+  if (scopeId === 'hub') {
+    children = children.concat(nodes.filter(n => n.type === 'indie'));
+  }
+  const c = Math.max(1, children.length);
+
+  // Adaptive radii: scale R1 with number of children so they never crowd.
+  // More children → larger ring so arc-distance stays comfortable.
+  const R1_BASE = D * 0.22;
+  const MIN_ARC = D * 0.11; // minimum arc-gap between adjacent ring-1 nodes
+  const R1 = Math.max(R1_BASE, (MIN_ARC * c) / (2 * Math.PI));
+
+  // R2 scales with R1 and the maximum number of grandchildren in any group.
+  const maxGrandchildren = Math.max(
+    1,
+    ...children.map(ch => (childrenOf.get(ch.id) ?? []).length),
+  );
+  const R2_BASE = R1 * 1.85;
+  const R2 = Math.max(R2_BASE, R1 + maxGrandchildren * D * 0.022);
 
   const out: ScopedNode[] = [];
   const mk = (n: NodeData, x: number, y: number, level: number): ScopedNode => ({
@@ -128,12 +145,15 @@ export function computeScopedLayout(
   // Center
   out.push(mk(scope, 0, 0, 0));
 
-  // Ring 1 — direct children (+ indie themes when at the hub)
-  let children = (childrenOf.get(scopeId) ?? []).slice();
-  if (scopeId === 'hub') {
-    children = children.concat(nodes.filter(n => n.type === 'indie'));
-  }
-  const c = Math.max(1, children.length);
+  // Adaptive half-fan for ring-2 clusters:
+  // Use at most 38 % of each parent's angular sector so adjacent clusters
+  // stay visually separated by a clear gap.
+  const anglePerChild = (2 * Math.PI) / c;
+  const HALF_FAN = Math.min(
+    (32 * Math.PI) / 180,      // absolute cap
+    anglePerChild * 0.38,       // 38 % of the sector
+  );
+
   children.forEach((child, i) => {
     const angle = -Math.PI / 2 + (i / c) * Math.PI * 2;
     out.push(mk(child, Math.cos(angle) * R1, Math.sin(angle) * R1, 1));
@@ -142,7 +162,10 @@ export function computeScopedLayout(
     const gks = childrenOf.get(child.id) ?? [];
     const g = gks.length;
     gks.forEach((gk, j) => {
-      const offset = g === 1 ? 0 : (j - (g - 1) / 2) * ((GRAND_FAN * 2) / Math.max(1, g - 1));
+      const offset =
+        g === 1
+          ? 0
+          : (j - (g - 1) / 2) * ((HALF_FAN * 2) / Math.max(1, g - 1));
       const a = angle + offset;
       out.push(mk(gk, Math.cos(a) * R2, Math.sin(a) * R2, 2));
     });

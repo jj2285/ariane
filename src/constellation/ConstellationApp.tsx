@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ConstellationCanvas } from './ConstellationCanvas';
 import { InfoPanel } from './InfoPanel';
 import { Intro } from './Intro';
@@ -27,6 +27,19 @@ export function ConstellationApp() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [introActive, setIntroActive] = useState(() => !isIntroDone());
   const [macroMode, setMacroMode] = useState(false);
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
+
+  // Admin panel hidden by default — unlock with Ctrl+Shift+A
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+        setAdminUnlocked(v => !v);
+        setShowAdmin(false);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   const activeNode: RuntimeNode | null = selectedId
     ? (data.nodes.find(n => n.id === selectedId) as RuntimeNode | undefined) ?? null
@@ -181,18 +194,20 @@ export function ConstellationApp() {
 
       <ZoomControls />
 
-      <button
-        onClick={() => setShowAdmin(v => !v)}
-        style={{
-          position: 'absolute', bottom: 16, left: 16,
-          background: showAdmin ? '#059669' : 'rgba(255,255,255,0.92)',
-          border: '1px solid #d1fae5', borderRadius: 6, padding: '6px 12px',
-          cursor: 'pointer', fontSize: 11, fontWeight: 600,
-          color: showAdmin ? '#fff' : '#059669', backdropFilter: 'blur(8px)', zIndex: 5,
-        }}
-      >
-        {showAdmin ? '✕ Admin' : '⚙ Admin'}
-      </button>
+      {adminUnlocked && (
+        <button
+          onClick={() => setShowAdmin(v => !v)}
+          style={{
+            position: 'absolute', bottom: 16, left: 16,
+            background: showAdmin ? '#059669' : 'rgba(255,255,255,0.92)',
+            border: '1px solid #d1fae5', borderRadius: 6, padding: '6px 12px',
+            cursor: 'pointer', fontSize: 11, fontWeight: 600,
+            color: showAdmin ? '#fff' : '#059669', backdropFilter: 'blur(8px)', zIndex: 5,
+          }}
+        >
+          {showAdmin ? '✕ Admin' : '⚙ Admin'}
+        </button>
+      )}
 
       {introActive && (
         <Intro
