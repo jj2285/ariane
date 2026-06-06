@@ -26,6 +26,7 @@ export function ConstellationApp() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAdmin, setShowAdmin] = useState(false);
   const [introActive, setIntroActive] = useState(() => !isIntroDone());
+  const [macroMode, setMacroMode] = useState(false);
 
   const activeNode: RuntimeNode | null = selectedId
     ? (data.nodes.find(n => n.id === selectedId) as RuntimeNode | undefined) ?? null
@@ -76,6 +77,7 @@ export function ConstellationApp() {
         data={data}
         scopeId={scopeId}
         selectedId={selectedId}
+        macroMode={macroMode}
         onNodeClick={handleNodeClick}
       />
 
@@ -147,6 +149,35 @@ export function ConstellationApp() {
           </span>
         ))}
       </div>
+
+      {/* Macro mode toggle — reveal cross-sector relationship links */}
+      <button
+        onClick={() => setMacroMode(v => !v)}
+        title="Afficher les liens hors secteur (vision macro)"
+        style={{
+          position: 'absolute',
+          bottom: 130,
+          right: 16,
+          background: macroMode ? '#0f766e' : 'rgba(255,255,255,0.92)',
+          border: `1px solid ${macroMode ? '#0f766e' : '#d1fae5'}`,
+          borderRadius: 6,
+          padding: '6px 10px',
+          cursor: 'pointer',
+          fontSize: 11,
+          fontWeight: 600,
+          color: macroMode ? '#fff' : '#0f766e',
+          backdropFilter: 'blur(8px)',
+          zIndex: 5,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 5,
+          whiteSpace: 'nowrap',
+          boxShadow: macroMode ? '0 0 0 2px #5eead4' : 'none',
+        }}
+      >
+        <span style={{ fontSize: 13 }}>🔗</span>
+        {macroMode ? 'Liens croisés ON' : 'Liens croisés'}
+      </button>
 
       <ZoomControls />
 

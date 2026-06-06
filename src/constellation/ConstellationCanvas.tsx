@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback } from 'react';
-import type { ConstellationData, RuntimeEdge } from './types';
+import type { ConstellationData, NodeData, RuntimeEdge } from './types';
 import { computeScopedLayout, type ScopedNode } from './layout';
 import { COLORS, NODE_RADIUS, RELATION_STYLES } from './colors';
 
@@ -7,17 +7,20 @@ interface Props {
   data: ConstellationData;
   scopeId: string;
   selectedId: string | null;
+  macroMode: boolean;
   onNodeClick: (id: string) => void;
 }
 
 interface State {
   nodes: ScopedNode[];
+  allNodes: NodeData[];
   edges: RuntimeEdge[];
   zoom: number;
   panX: number;
   panY: number;
   scopeId: string;
   selectedId: string | null;
+  macroMode: boolean;
   hubRotation: number;
   dragStart: { x: number; y: number; px: number; py: number } | null;
   hoverNodeId: string | null;
@@ -36,16 +39,18 @@ function bezierPoint(
   };
 }
 
-export function ConstellationCanvas({ data, scopeId, selectedId, onNodeClick }: Props) {
+export function ConstellationCanvas({ data, scopeId, selectedId, macroMode, onNodeClick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stRef = useRef<State>({
     nodes: [],
+    allNodes: [],
     edges: [],
     zoom: 1,
     panX: 0,
     panY: 0,
     scopeId: 'hub',
     selectedId: null,
+    macroMode: false,
     hubRotation: 0,
     dragStart: null,
     hoverNodeId: null,
@@ -55,9 +60,8 @@ export function ConstellationCanvas({ data, scopeId, selectedId, onNodeClick }: 
   const prevTsRef = useRef<number>(0);
 
   // Sync props into state ref
-  useEffect(() => {
-    stRef.current.selectedId = selectedId;
-  }, [selectedId]);
+  useEffect(() => { stRef.current.selectedId = selectedId; }, [selectedId]);
+  useEffect(() => { stRef.current.macroMode = macroMode; }, [macroMode]);
 
   // Rebuild the scoped view whenever the data or current level changes.
   useEffect(() => {
@@ -70,6 +74,7 @@ export function ConstellationCanvas({ data, scopeId, selectedId, onNodeClick }: 
 
     stRef.current.scopeId = scopeId;
     stRef.current.nodes = rNodes;
+    stRef.current.allNodes = data.nodes;
     stRef.current.edges = data.edges.map(e => ({ ...e, visible: true, particleT: Math.random() }));
 
     // Reset framing on every drill so the level is centered.
@@ -203,32 +208,63 @@ export function ConstellationCanvas({ data, scopeId, selectedId, onNodeClick }: 
 
     const find = (id: string) => st.nodes.find(n => n.id === id);
 
-    // ── Relationship edges — only for the selected node, both ends visible ──
+    // ── Ghost positions for macro mode (cross-sector nodes outside current scope) ──
+    const ghostPos = new Map<string, { x: number; y: number }>();
+    if (st.macroMode && selectedId) {
+      const D = Math.min(W, H);
+      const R_GHOST = D * 0.68;
+      const outsideIds = [...new Set(
+        st.edges
+          .filter(e => (e.sourceId === selectedId || e.targetId === selectedId))
+          .map(e => e.sourceId === selectedId ? e.targetId : e.sourceId)
+          .filter(id => !visibleIds.has(id))
+      )];
+      outsideIds.forEach((id, i) => {
+        const angle = -Math.PI / 2 + (i / Math.max(1, outsideIds.length)) * Math.PI * 2;
+        ghostPos.set(id, { x: Math.cos(angle) * R_GHOST, y: Math.sin(angle) * R_GHOST });
+      });
+    }
+
+    // Helper: coordinates for any node (scoped or ghost)
+    const getCoords = (id: string): { x: number; y: number; phase: number } | null => {
+      const n = find(id);
+      if (n && n.visible) return { x: n.x, y: n.y, phase: n.phase };
+      const gp = ghostPos.get(id);
+      if (gp) return { x: gp.x, y: gp.y, phase: 0 };
+      return null;
+    };
+
+    // ── Relationship edges — selected node, both ends available (scoped or ghost) ──
     if (selectedId) {
       for (const e of st.edges) {
         if (e.sourceId !== selectedId && e.targetId !== selectedId) continue;
-        if (!visibleIds.has(e.sourceId) || !visibleIds.has(e.targetId)) continue;
-        const src = find(e.sourceId);
-        const tgt = find(e.targetId);
-        if (!src || !tgt || !src.visible || !tgt.visible) continue;
+        const srcCoords = getCoords(e.sourceId);
+        const tgtCoords = getCoords(e.targetId);
+        if (!srcCoords || !tgtCoords) continue;
+        const isGhostEdge = ghostPos.has(e.sourceId) || ghostPos.has(e.targetId);
 
-        const ox = src.x + Math.sin(ts * 0.0004 + src.phase) * 3;
-        const oy = src.y + Math.cos(ts * 0.0004 + src.phase) * 3;
-        const tx = tgt.x + Math.sin(ts * 0.0004 + tgt.phase) * 3;
-        const ty = tgt.y + Math.cos(ts * 0.0004 + tgt.phase) * 3;
+        // Without macro mode, skip edges where either end is outside the scope.
+        if (!st.macroMode && (!visibleIds.has(e.sourceId) || !visibleIds.has(e.targetId))) continue;
+
+        const ox = srcCoords.x + Math.sin(ts * 0.0004 + srcCoords.phase) * 3;
+        const oy = srcCoords.y + Math.cos(ts * 0.0004 + srcCoords.phase) * 3;
+        const tx = tgtCoords.x + Math.sin(ts * 0.0004 + tgtCoords.phase) * 3;
+        const ty = tgtCoords.y + Math.cos(ts * 0.0004 + tgtCoords.phase) * 3;
         const mx = (ox + tx) / 2;
         const my = (oy + ty) / 2;
         const cx = mx - (ty - oy) * 0.25;
         const cy = my + (tx - ox) * 0.25;
 
+        const srcNode = find(e.sourceId) ?? st.allNodes.find(n => n.id === e.sourceId);
+        const tgtNode = find(e.targetId) ?? st.allNodes.find(n => n.id === e.targetId);
         const relStyle = e.relationType ? RELATION_STYLES[e.relationType] : undefined;
         const isPersonEdge = !relStyle &&
-          (src.type === 'person' || src.type === 'elu') &&
-          (tgt.type === 'person' || tgt.type === 'elu');
+          (srcNode?.type === 'person' || srcNode?.type === 'elu') &&
+          (tgtNode?.type === 'person' || tgtNode?.type === 'elu');
         const edgeColor = relStyle ?? (isPersonEdge ? COLORS.personEdge : COLORS.edge);
 
         ctx.save();
-        ctx.globalAlpha = 0.9;
+        ctx.globalAlpha = isGhostEdge ? 0.55 : 0.9;
         ctx.strokeStyle = edgeColor.stroke;
         ctx.lineWidth = relStyle ? 2 : 1.5;
         ctx.setLineDash([5, 6]);
@@ -492,6 +528,65 @@ export function ConstellationCanvas({ data, scopeId, selectedId, onNodeClick }: 
       }
 
       ctx.restore();
+    }
+
+    // ── Ghost nodes (macro mode: out-of-scope connected nodes) ──────────────
+    if (st.macroMode && ghostPos.size > 0) {
+      const GHOST_COLORS: Record<string, { fill: string; stroke: string; text: string }> = {
+        person:      { fill: '#fff7ed', stroke: '#fb923c', text: '#9a3412' },
+        elu:         { fill: '#faf5ff', stroke: '#c084fc', text: '#6b21a8' },
+        company:     { fill: '#eff6ff', stroke: '#60a5fa', text: '#1e40af' },
+        institution: { fill: '#f1f5f9', stroke: '#94a3b8', text: '#334155' },
+        subtheme:    { fill: '#f0fdf4', stroke: '#34d399', text: '#065f46' },
+      };
+
+      for (const [ghostId, gp] of ghostPos.entries()) {
+        const ghostData = st.allNodes.find(n => n.id === ghostId);
+        if (!ghostData) continue;
+        const tc = GHOST_COLORS[ghostData.type] ?? GHOST_COLORS.subtheme;
+        const r = (NODE_RADIUS[ghostData.type] ?? 18) * 0.88;
+
+        ctx.save();
+        ctx.translate(gp.x, gp.y);
+        ctx.globalAlpha = 0.70;
+
+        ctx.fillStyle = tc.fill;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = tc.stroke;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        if (ghostData.type === 'person' || ghostData.type === 'elu') {
+          const parts = ghostData.title.split(' ');
+          const initials = parts.length >= 2
+            ? (parts[0][0] + parts[1][0]).toUpperCase()
+            : ghostData.title.slice(0, 2).toUpperCase();
+          ctx.fillStyle = tc.text;
+          ctx.font = `700 ${Math.round(r * 0.52)}px system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(initials, 0, 0);
+        }
+
+        // Label + sector badge below
+        ctx.globalAlpha = 0.80;
+        ctx.fillStyle = '#374151';
+        ctx.font = `600 10px system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(ghostData.label, 0, r + 5);
+        if (ghostData.personCompany) {
+          ctx.fillStyle = tc.text;
+          ctx.font = `500 9px system-ui, sans-serif`;
+          ctx.fillText(ghostData.personCompany, 0, r + 17);
+        }
+
+        ctx.restore();
+      }
     }
 
     ctx.restore();
