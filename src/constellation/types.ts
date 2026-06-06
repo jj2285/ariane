@@ -1,7 +1,17 @@
+export type NodeType =
+  | 'hub'
+  | 'pillar'
+  | 'subtheme'
+  | 'indie'
+  | 'company'
+  | 'person'
+  | 'elu'
+  | 'institution';
+
 export interface NodeData {
   id: string;
   label: string;
-  type: 'hub' | 'pillar' | 'subtheme' | 'indie' | 'company' | 'person';
+  type: NodeType;
   parentId?: string;
   depth: number;
   // Panel content
@@ -15,13 +25,29 @@ export interface NodeData {
   personEmail?: string;
   personPhone?: string;
   personCompany?: string;
+  // Élu / Député fields
+  eluMandate?: string;       // ex: "Députée — Paris 12e circonscription"
+  eluParty?: string;         // ex: "Renaissance"
+  eluCommission?: string;    // ex: "Commission des Affaires sociales"
+  // Institution fields
+  institutionKind?: string;  // ex: "Autorité de régulation", "Ministère"
 }
+
+// Typed relationships — drive edge color and meaning.
+export type RelationType =
+  | 'soutient'
+  | 'finance'
+  | 'fournit'
+  | 'regule'
+  | 'emploie'
+  | 'collabore';
 
 export interface EdgeData {
   id: string;
   sourceId: string;
   targetId: string;
   label: string;
+  relationType?: RelationType;
 }
 
 export interface ConstellationData {

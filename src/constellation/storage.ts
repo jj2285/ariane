@@ -1,7 +1,9 @@
 import type { ConstellationData } from './types';
 import { DEFAULT_DATA } from './defaultData';
 
-const KEY = 'lpe_constellation_data';
+// Bump the version suffix whenever DEFAULT_DATA changes structurally so that
+// returning visitors load the fresh dataset instead of stale localStorage.
+const KEY = 'lpe_constellation_data_v2';
 
 export function loadData(): ConstellationData {
   try {

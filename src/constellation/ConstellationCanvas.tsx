@@ -1,7 +1,7 @@
-import { useRef, useEffect, useCallback } from 'react';;
+import { useRef, useEffect, useCallback } from 'react';
 import type { ConstellationData, RuntimeNode, RuntimeEdge } from './types';
 import { computeLayout } from './layout';
-import { COLORS, NODE_RADIUS } from './colors';
+import { COLORS, NODE_RADIUS, RELATION_STYLES } from './colors';
 
 interface Props {
   data: ConstellationData;
@@ -96,12 +96,12 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
     pillars.forEach((p, i) => showAt([p.id], 1150 + i * 65));
     const subs = rNodes.filter(n => n.type === 'subtheme' || n.type === 'indie');
     subs.forEach((s, i) => showAt([s.id], 1150 + pillars.length * 65 + 200 + i * 65));
-    const companies = rNodes.filter(n => n.type === 'company');
-    const baseCompany = 1150 + pillars.length * 65 + 200 + subs.length * 65 + 300;
-    companies.forEach((c, i) => showAt([c.id], baseCompany + i * 65));
-    const persons = rNodes.filter(n => n.type === 'person');
-    const basePerson = baseCompany + companies.length * 65 + 200;
-    persons.forEach((p, i) => showAt([p.id], basePerson + i * 65));
+    const orgs = rNodes.filter(n => n.type === 'company' || n.type === 'institution');
+    const baseOrg = 1150 + pillars.length * 65 + 200 + subs.length * 65 + 300;
+    orgs.forEach((c, i) => showAt([c.id], baseOrg + i * 65));
+    const people = rNodes.filter(n => n.type === 'person' || n.type === 'elu');
+    const basePeople = baseOrg + orgs.length * 65 + 200;
+    people.forEach((p, i) => showAt([p.id], basePeople + i * 65));
   }, [data]);
 
   const hitTest = useCallback((cx: number, cy: number, canvas: HTMLCanvasElement): string | null => {
@@ -142,11 +142,23 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
       st.panX = 0;
       st.panY = 0;
     };
+    const onCenter = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      const st = stRef.current;
+      const n = st.nodes.find(x => x.id === id);
+      if (!n) return;
+      n.visible = true;
+      st.zoom = Math.max(st.zoom, 1.3);
+      st.panX = -n.x * st.zoom;
+      st.panY = -n.y * st.zoom;
+    };
     window.addEventListener('constellation-zoom', onZoom);
     window.addEventListener('constellation-reset', onReset);
+    window.addEventListener('constellation-center', onCenter);
     return () => {
       window.removeEventListener('constellation-zoom', onZoom);
       window.removeEventListener('constellation-reset', onReset);
+      window.removeEventListener('constellation-center', onCenter);
     };
   }, []);
 
@@ -253,13 +265,16 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
         ? (connectedIds.has(e.sourceId) && connectedIds.has(e.targetId) ? 0.8 : 0.05)
         : 0.4;
 
-      const isPersonEdge = src.type === 'person' && tgt.type === 'person';
-      const edgeColor = isPersonEdge ? COLORS.personEdge : COLORS.edge;
+      const relStyle = e.relationType ? RELATION_STYLES[e.relationType] : undefined;
+      const isPersonEdge = !relStyle &&
+        (src.type === 'person' || src.type === 'elu') &&
+        (tgt.type === 'person' || tgt.type === 'elu');
+      const edgeColor = relStyle ?? (isPersonEdge ? COLORS.personEdge : COLORS.edge);
 
       ctx.save();
       ctx.globalAlpha = edgeOpacity;
       ctx.strokeStyle = edgeColor.stroke;
-      ctx.lineWidth = isPersonEdge ? 1.2 : 1.5;
+      ctx.lineWidth = relStyle ? 1.8 : isPersonEdge ? 1.2 : 1.5;
       ctx.setLineDash([5, 6]);
       ctx.beginPath();
       ctx.moveTo(ox, oy);
@@ -303,8 +318,14 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
     }
 
     // Hub–pillar lines (tree edges)
+    const TREE_LINK_COLOR: Record<string, string> = {
+      person: '#fb923c',
+      elu: '#c084fc',
+      company: '#60a5fa',
+      institution: '#94a3b8',
+    };
     for (const n of st.nodes) {
-      if (n.type !== 'pillar' && n.type !== 'subtheme' && n.type !== 'company' && n.type !== 'person') continue;
+      if (n.type === 'hub' || n.type === 'pillar' || n.type === 'indie') continue;
       if (!n.parentId) continue;
       const parent = st.nodes.find(p => p.id === n.parentId);
       if (!parent || !parent.visible || !n.visible) continue;
@@ -316,10 +337,9 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
 
       const op = Math.min(nodeOpacity(n.id), nodeOpacity(parent.id));
 
-      const isPersonLink = n.type === 'person' || (st.nodes.find(x => x.id === n.parentId)?.type === 'person');
       ctx.save();
       ctx.globalAlpha = op * 0.25 * n.opacity;
-      ctx.strokeStyle = isPersonLink ? '#fb923c' : (n.type === 'company' ? '#60a5fa' : '#34d399');
+      ctx.strokeStyle = TREE_LINK_COLOR[n.type] ?? '#34d399';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(px, py);
@@ -351,7 +371,7 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
 
     // --- Draw nodes ---
     const sortedNodes = [...st.nodes].sort((a, b) => {
-      const order: Record<string, number> = { hub: 5, pillar: 4, subtheme: 3, indie: 3, company: 2, person: 1 };
+      const order: Record<string, number> = { hub: 5, pillar: 4, subtheme: 3, indie: 3, institution: 2, company: 2, elu: 1, person: 1 };
       return (order[a.type] ?? 0) - (order[b.type] ?? 0);
     });
 
@@ -490,6 +510,55 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(initials, 0, 0);
+
+      } else if (n.type === 'elu') {
+        // Élu / Député: purple circle with initials
+        ctx.fillStyle = COLORS.elu.fill;
+        ctx.beginPath();
+        ctx.arc(0, 0, finalR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = COLORS.elu.stroke;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        const parts = n.title.split(' ');
+        const initials = parts.length >= 2
+          ? (parts[0][0] + parts[1][0]).toUpperCase()
+          : n.title.slice(0, 2).toUpperCase();
+        ctx.fillStyle = COLORS.elu.initials;
+        ctx.font = `700 ${Math.round(finalR * 0.5)}px system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(initials, 0, 0);
+
+      } else if (n.type === 'institution') {
+        // Institution: slate rounded square (distinct shape from circles)
+        const s = finalR * 0.92;
+        const rad = finalR * 0.28;
+        ctx.fillStyle = COLORS.institution.fill;
+        ctx.strokeStyle = COLORS.institution.stroke;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-s + rad, -s);
+        ctx.arcTo(s, -s, s, s, rad);
+        ctx.arcTo(s, s, -s, s, rad);
+        ctx.arcTo(-s, s, -s, -s, rad);
+        ctx.arcTo(-s, -s, s, -s, rad);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = COLORS.institution.text;
+        ctx.font = `600 ${Math.round(finalR * 0.34)}px system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const iWords = n.label.split(' ');
+        if (iWords.length > 1) {
+          ctx.fillText(iWords[0], 0, -finalR * 0.18);
+          ctx.fillText(iWords.slice(1).join(' '), 0, finalR * 0.18);
+        } else {
+          ctx.fillText(n.label, 0, 0);
+        }
 
       } else {
         // subtheme

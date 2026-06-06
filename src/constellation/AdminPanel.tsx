@@ -1,6 +1,12 @@
 import { useState } from 'react';
-import type { ConstellationData, NodeData, EdgeData } from './types';
-import { saveData } from './storage';
+import type { ConstellationData, NodeData, EdgeData, RelationType } from './types';
+import { saveData, resetData } from './storage';
+
+const DEPTH_BY_TYPE: Record<string, number> = {
+  pillar: 1, indie: 1, subtheme: 2, company: 3, institution: 3, person: 4, elu: 4,
+};
+
+const RELATION_OPTIONS: RelationType[] = ['soutient', 'finance', 'fournit', 'regule', 'emploie', 'collabore'];
 
 interface Props {
   data: ConstellationData;
@@ -38,22 +44,37 @@ export function AdminPanel({ data, onChange, onClose }: Props) {
 
   const createNode = () => {
     if (!newNode.label || !newNode.title) return;
+    const type = (newNode.type as NodeData['type']) || 'subtheme';
     const id = `node-${Date.now()}`;
     const node: NodeData = {
       id,
       label: newNode.label!,
-      type: newNode.type as NodeData['type'] || 'subtheme',
-      parentId: newNode.type !== 'indie' ? newNode.parentId : undefined,
-      depth: newNode.type === 'pillar' ? 1 : newNode.type === 'indie' ? 1 : 2,
+      type,
+      parentId: type !== 'indie' ? newNode.parentId : undefined,
+      depth: DEPTH_BY_TYPE[type] ?? 2,
       title: newNode.title!,
       body: newNode.body || '',
       stat: newNode.stat,
       statLabel: newNode.statLabel,
+      personPosition: newNode.personPosition,
+      personEmail: newNode.personEmail,
+      personPhone: newNode.personPhone,
+      personCompany: newNode.personCompany,
+      eluMandate: newNode.eluMandate,
+      eluParty: newNode.eluParty,
+      eluCommission: newNode.eluCommission,
+      institutionKind: newNode.institutionKind,
     };
     const newData = { ...data, nodes: [...data.nodes, node] };
     saveData(newData);
     onChange(newData);
     setNewNode({ type: 'subtheme', depth: 2, label: '', title: '', body: '' });
+    setTab('nodes');
+  };
+
+  const handleReset = () => {
+    const fresh = resetData();
+    onChange(fresh);
     setTab('nodes');
   };
 
@@ -64,6 +85,7 @@ export function AdminPanel({ data, onChange, onClose }: Props) {
       sourceId: edgeDraft.sourceId!,
       targetId: edgeDraft.targetId!,
       label: edgeDraft.label!,
+      relationType: edgeDraft.relationType,
     };
     const newData = { ...data, edges: [...data.edges, edge] };
     saveData(newData);
@@ -220,20 +242,48 @@ export function AdminPanel({ data, onChange, onClose }: Props) {
               <select value={newNode.type} onChange={e => setNewNode(n => ({ ...n, type: e.target.value as NodeData['type'] }))} style={inputStyle}>
                 <option value="pillar">Pilier</option>
                 <option value="subtheme">Sous-thème</option>
-                <option value="indie">Thème indépendant</option>
+                <option value="indie">Thème transverse</option>
+                <option value="company">Entreprise</option>
+                <option value="institution">Institution</option>
+                <option value="person">Contact</option>
+                <option value="elu">Élu / Député</option>
               </select>
             </div>
-            {newNode.type === 'subtheme' && (
+            {newNode.type !== 'indie' && newNode.type !== 'pillar' && (
               <div style={{ marginBottom: 10 }}>
                 <label style={{ display: 'block', marginBottom: 4, fontSize: 10, color: '#6b7280', textTransform: 'uppercase' }}>Parent</label>
                 <select value={newNode.parentId || ''} onChange={e => setNewNode(n => ({ ...n, parentId: e.target.value }))} style={inputStyle}>
                   <option value="">— choisir —</option>
-                  {data.nodes.filter(n => n.type === 'pillar' || n.type === 'subtheme').map(n => (
-                    <option key={n.id} value={n.id}>{n.label}</option>
+                  {data.nodes.filter(n => n.type !== 'hub').map(n => (
+                    <option key={n.id} value={n.id}>{n.label} ({n.type})</option>
                   ))}
                 </select>
               </div>
             )}
+            {newNode.type === 'elu' && (['eluMandate', 'eluParty', 'eluCommission'] as const).map(field => (
+              <div key={field} style={{ marginBottom: 8 }}>
+                <label style={{ display: 'block', marginBottom: 3, fontSize: 10, color: '#6b7280', textTransform: 'uppercase' }}>{field}</label>
+                <input value={(newNode as Record<string, string>)[field] || ''} onChange={e => setNewNode(n => ({ ...n, [field]: e.target.value }))} style={inputStyle} />
+              </div>
+            ))}
+            {newNode.type === 'institution' && (
+              <div style={{ marginBottom: 8 }}>
+                <label style={{ display: 'block', marginBottom: 3, fontSize: 10, color: '#6b7280', textTransform: 'uppercase' }}>institutionKind</label>
+                <input value={newNode.institutionKind || ''} onChange={e => setNewNode(n => ({ ...n, institutionKind: e.target.value }))} style={inputStyle} />
+              </div>
+            )}
+            {(newNode.type === 'person' || newNode.type === 'elu') && (['personEmail', 'personPhone'] as const).map(field => (
+              <div key={field} style={{ marginBottom: 8 }}>
+                <label style={{ display: 'block', marginBottom: 3, fontSize: 10, color: '#6b7280', textTransform: 'uppercase' }}>{field}</label>
+                <input value={(newNode as Record<string, string>)[field] || ''} onChange={e => setNewNode(n => ({ ...n, [field]: e.target.value }))} style={inputStyle} />
+              </div>
+            ))}
+            {newNode.type === 'person' && (['personPosition', 'personCompany'] as const).map(field => (
+              <div key={field} style={{ marginBottom: 8 }}>
+                <label style={{ display: 'block', marginBottom: 3, fontSize: 10, color: '#6b7280', textTransform: 'uppercase' }}>{field}</label>
+                <input value={(newNode as Record<string, string>)[field] || ''} onChange={e => setNewNode(n => ({ ...n, [field]: e.target.value }))} style={inputStyle} />
+              </div>
+            ))}
             {(['label', 'title', 'body', 'stat', 'statLabel'] as const).map(field => (
               <div key={field} style={{ marginBottom: 8 }}>
                 <label style={{ display: 'block', marginBottom: 3, fontSize: 10, color: '#6b7280', textTransform: 'uppercase' }}>{field}</label>
@@ -261,12 +311,29 @@ export function AdminPanel({ data, onChange, onClose }: Props) {
               </div>
             ))}
             <div style={{ marginBottom: 10 }}>
+              <label style={{ display: 'block', marginBottom: 4, fontSize: 10, color: '#6b7280', textTransform: 'uppercase' }}>Type de relation</label>
+              <select value={edgeDraft.relationType || ''} onChange={e => setEdgeDraft(d => ({ ...d, relationType: (e.target.value || undefined) as RelationType | undefined }))} style={inputStyle}>
+                <option value="">— neutre —</option>
+                {RELATION_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <div style={{ marginBottom: 10 }}>
               <label style={{ display: 'block', marginBottom: 4, fontSize: 10, color: '#6b7280', textTransform: 'uppercase' }}>Étiquette</label>
-              <input value={edgeDraft.label || ''} onChange={e => setEdgeDraft(d => ({ ...d, label: e.target.value }))} style={inputStyle} placeholder="s'appuie sur, consomme…" />
+              <input value={edgeDraft.label || ''} onChange={e => setEdgeDraft(d => ({ ...d, label: e.target.value }))} style={inputStyle} placeholder="auditionne, finance, fournit…" />
             </div>
             <button onClick={createEdge} style={{ ...btnStyle, width: '100%' }}>Créer le lien</button>
           </div>
         )}
+      </div>
+
+      {/* Footer — reset */}
+      <div style={{ padding: '10px 14px', borderTop: '1px solid #1a3329' }}>
+        <button
+          onClick={handleReset}
+          style={{ background: 'none', border: '1px solid #3b0f0f', color: '#f87171', borderRadius: 4, padding: '6px 12px', cursor: 'pointer', fontSize: 11, width: '100%' }}
+        >
+          ↺ Réinitialiser les données
+        </button>
       </div>
     </div>
   );

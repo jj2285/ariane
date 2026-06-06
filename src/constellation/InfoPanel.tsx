@@ -7,12 +7,14 @@ interface Props {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  hub: 'HUB',
+  hub: 'CŒUR',
   pillar: 'PILIER',
-  indie: 'THÈME INDÉPENDANT',
+  indie: 'THÈME TRANSVERSE',
   subtheme: 'SOUS-THÈME',
   company: 'ENTREPRISE',
   person: 'CONTACT',
+  elu: 'ÉLU / DÉPUTÉ',
+  institution: 'INSTITUTION',
 };
 
 const TYPE_COLORS: Record<string, { bg: string; border: string; text: string; accent: string }> = {
@@ -22,9 +24,11 @@ const TYPE_COLORS: Record<string, { bg: string; border: string; text: string; ac
   subtheme:{ bg: '#f0fdf4', border: '#a7f3d0', text: '#064e3b', accent: '#059669' },
   company: { bg: '#eff6ff', border: '#bfdbfe', text: '#1e40af', accent: '#2563eb' },
   person:  { bg: '#fff7ed', border: '#fed7aa', text: '#9a3412', accent: '#ea580c' },
+  elu:     { bg: '#faf5ff', border: '#e9d5ff', text: '#6b21a8', accent: '#9333ea' },
+  institution: { bg: '#f1f5f9', border: '#cbd5e1', text: '#334155', accent: '#475569' },
 };
 
-function Avatar({ name }: { name: string }) {
+function Avatar({ name, fill, border, color }: { name: string; fill: string; border: string; color: string }) {
   const parts = name.trim().split(' ');
   const initials = parts.length >= 2
     ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
@@ -35,14 +39,14 @@ function Avatar({ name }: { name: string }) {
       width: 56,
       height: 56,
       borderRadius: '50%',
-      background: '#fff7ed',
-      border: '2.5px solid #fb923c',
+      background: fill,
+      border: `2.5px solid ${border}`,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       fontSize: 20,
       fontWeight: 700,
-      color: '#c2410c',
+      color,
       flexShrink: 0,
     }}>
       {initials}
@@ -75,9 +79,16 @@ export function InfoPanel({ node, onClose }: Props) {
   if (!displayed) return null;
 
   const colors = TYPE_COLORS[displayed.type] ?? TYPE_COLORS.subtheme;
-  const isPerson = displayed.type === 'person';
+  const isElu = displayed.type === 'elu';
+  const isPerson = displayed.type === 'person' || isElu;
   const isCompany = displayed.type === 'company';
-  const panelBorder = isPerson ? '#fed7aa' : isCompany ? '#bfdbfe' : '#d1fae5';
+  const isInstitution = displayed.type === 'institution';
+  const panelBorder =
+    isElu ? '#e9d5ff'
+    : displayed.type === 'person' ? '#fed7aa'
+    : isCompany ? '#bfdbfe'
+    : isInstitution ? '#cbd5e1'
+    : '#d1fae5';
 
   return (
     <div style={{
@@ -131,20 +142,25 @@ export function InfoPanel({ node, onClose }: Props) {
           {TYPE_LABELS[displayed.type] ?? displayed.type}
         </span>
 
-        {/* ── FICHE PERSONNE ─────────────────────────────── */}
+        {/* ── FICHE PERSONNE / ÉLU ─────────────────────────── */}
         {isPerson ? (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16, marginBottom: 14 }}>
-              <Avatar name={displayed.title} />
+              <Avatar
+                name={displayed.title}
+                fill={colors.bg}
+                border={isElu ? '#c084fc' : '#fb923c'}
+                color={colors.accent}
+              />
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: '#111827', lineHeight: 1.2 }}>
                   {displayed.title}
                 </div>
-                <div style={{ fontSize: 12, color: '#ea580c', fontWeight: 600, marginTop: 3 }}>
-                  {displayed.personPosition}
+                <div style={{ fontSize: 12, color: colors.accent, fontWeight: 600, marginTop: 3 }}>
+                  {isElu ? displayed.eluMandate : displayed.personPosition}
                 </div>
                 <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
-                  {displayed.personCompany}
+                  {isElu ? displayed.eluParty : displayed.personCompany}
                 </div>
               </div>
             </div>
@@ -153,31 +169,47 @@ export function InfoPanel({ node, onClose }: Props) {
               {displayed.body}
             </p>
 
-            {/* Bloc contact */}
-            <div style={{
-              background: '#fff7ed',
-              border: '1px solid #fed7aa',
-              borderRadius: 8,
-              padding: '12px 14px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-              marginBottom: 16,
-            }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#ea580c', letterSpacing: '0.08em', marginBottom: 4 }}>
-                CONTACT
+            {isElu && displayed.eluCommission && (
+              <div style={{
+                fontSize: 12,
+                color: colors.text,
+                background: colors.bg,
+                border: `1px solid ${colors.border}`,
+                borderRadius: 8,
+                padding: '8px 12px',
+                marginBottom: 16,
+              }}>
+                <span style={{ fontWeight: 600 }}>Commission · </span>{displayed.eluCommission}
               </div>
-              {displayed.personEmail && (
-                <ContactRow icon="✉" value={displayed.personEmail} href={`mailto:${displayed.personEmail}`} />
-              )}
-              {displayed.personPhone && (
-                <ContactRow icon="☎" value={displayed.personPhone} href={`tel:${displayed.personPhone}`} />
-              )}
-            </div>
+            )}
+
+            {/* Bloc contact */}
+            {(displayed.personEmail || displayed.personPhone) && (
+              <div style={{
+                background: colors.bg,
+                border: `1px solid ${colors.border}`,
+                borderRadius: 8,
+                padding: '12px 14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                marginBottom: 16,
+              }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: colors.accent, letterSpacing: '0.08em', marginBottom: 4 }}>
+                  CONTACT
+                </div>
+                {displayed.personEmail && (
+                  <ContactRow icon="✉" value={displayed.personEmail} href={`mailto:${displayed.personEmail}`} />
+                )}
+                {displayed.personPhone && (
+                  <ContactRow icon="☎" value={displayed.personPhone} href={`tel:${displayed.personPhone}`} />
+                )}
+              </div>
+            )}
 
             {displayed.stat && (
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                <span style={{ fontSize: 22, fontWeight: 700, color: '#ea580c', fontFamily: 'Georgia, serif' }}>
+                <span style={{ fontSize: 22, fontWeight: 700, color: colors.accent, fontFamily: 'Georgia, serif' }}>
                   {displayed.stat}
                 </span>
                 <span style={{ fontSize: 11, color: '#6b7280' }}>{displayed.statLabel}</span>
@@ -197,6 +229,12 @@ export function InfoPanel({ node, onClose }: Props) {
             }}>
               {displayed.title}
             </h2>
+
+            {isInstitution && displayed.institutionKind && (
+              <div style={{ fontSize: 12, color: colors.accent, fontWeight: 600, marginBottom: 10 }}>
+                {displayed.institutionKind}
+              </div>
+            )}
 
             <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, margin: '0 0 20px' }}>
               {displayed.body}

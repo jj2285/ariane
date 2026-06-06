@@ -3,6 +3,8 @@ import { ConstellationCanvas } from './ConstellationCanvas';
 import { InfoPanel } from './InfoPanel';
 import { Intro } from './Intro';
 import { AdminPanel } from './AdminPanel';
+import { Legend } from './Legend';
+import { SearchBar } from './SearchBar';
 import type { ConstellationData, RuntimeNode } from './types';
 import { loadData, isIntroDone } from './storage';
 
@@ -64,6 +66,10 @@ export function ConstellationApp() {
         />
       )}
 
+      <SearchBar data={data} onSelect={handleNodeClick} />
+
+      <Legend />
+
       <div style={{
         position: 'absolute',
         top: 16,
@@ -73,19 +79,19 @@ export function ConstellationApp() {
         alignItems: 'center',
         gap: 10,
         background: 'rgba(255,255,255,0.92)',
-        border: '1px solid #d1fae5',
+        border: '1px solid #e2e8f0',
         borderRadius: 8,
         padding: '8px 16px',
         backdropFilter: 'blur(8px)',
         zIndex: 5,
         pointerEvents: 'none',
       }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#059669', letterSpacing: '0.1em' }}>
-          CONSTELLATION DES SOUVERAINETÉS
+        <span style={{ fontSize: 12, fontWeight: 800, color: '#1e293b', letterSpacing: '0.16em' }}>
+          ARIANE
         </span>
-        <span style={{ color: '#d1fae5', fontSize: 10 }}>·</span>
-        <span style={{ fontSize: 10, color: '#6b7280' }}>
-          {data.nodes.length} nœuds · {data.edges.length} interdépendances
+        <span style={{ color: '#cbd5e1', fontSize: 10 }}>·</span>
+        <span style={{ fontSize: 10, color: '#64748b' }}>
+          le fil des acteurs · {data.nodes.length} nœuds · {data.edges.length} liens
         </span>
       </div>
 
