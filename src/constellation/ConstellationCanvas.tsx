@@ -9,6 +9,7 @@ interface Props {
   selectedId: string | null;
   macroMode: boolean;
   onNodeClick: (id: string) => void;
+  onEdgeClick?: (id: string, x: number, y: number) => void;
 }
 
 interface State {
@@ -24,6 +25,7 @@ interface State {
   hubRotation: number;
   dragStart: { x: number; y: number; px: number; py: number } | null;
   hoverNodeId: string | null;
+  hoverEdgeId: string | null;
 }
 
 function bezierPoint(
@@ -39,7 +41,7 @@ function bezierPoint(
   };
 }
 
-export function ConstellationCanvas({ data, scopeId, selectedId, macroMode, onNodeClick }: Props) {
+export function ConstellationCanvas({ data, scopeId, selectedId, macroMode, onNodeClick, onEdgeClick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stRef = useRef<State>({
     nodes: [],
@@ -54,6 +56,7 @@ export function ConstellationCanvas({ data, scopeId, selectedId, macroMode, onNo
     hubRotation: 0,
     dragStart: null,
     hoverNodeId: null,
+    hoverEdgeId: null,
   });
   const frameRef = useRef<((ts: number) => void) | null>(null);
   const rafRef = useRef<number>(0);
@@ -124,6 +127,44 @@ export function ConstellationCanvas({ data, scopeId, selectedId, macroMode, onNo
       }
     }
     return best;
+  }, []);
+
+  const hitTestEdge = useCallback((cx: number, cy: number, canvas: HTMLCanvasElement): string | null => {
+    const st = stRef.current;
+    if (!st.selectedId) return null;
+    const W = canvas.offsetWidth;
+    const H = canvas.offsetHeight;
+    const worldX = (cx - W / 2 - st.panX) / st.zoom;
+    const worldY = (cy - H / 2 - st.panY) / st.zoom;
+    const threshold = Math.max(8, 10 / st.zoom);
+
+    const visibleIds = new Set(st.nodes.map(n => n.id));
+    const getPos = (id: string) => {
+      const n = st.nodes.find(x => x.id === id);
+      if (n && n.visible) return { x: n.x, y: n.y };
+      return null;
+    };
+
+    for (const e of st.edges) {
+      if (e.sourceId !== st.selectedId && e.targetId !== st.selectedId) continue;
+      if (!st.macroMode && (!visibleIds.has(e.sourceId) || !visibleIds.has(e.targetId))) continue;
+      const src = getPos(e.sourceId);
+      const tgt = getPos(e.targetId);
+      if (!src || !tgt) continue;
+
+      const mx = (src.x + tgt.x) / 2;
+      const my = (src.y + tgt.y) / 2;
+      const bx = mx - (tgt.y - src.y) * 0.25;
+      const by = my + (tgt.x - src.x) * 0.25;
+
+      for (let t = 0; t <= 1; t += 0.05) {
+        const pt = bezierPoint(t, src.x, src.y, bx, by, tgt.x, tgt.y);
+        if (Math.sqrt((pt.x - worldX) ** 2 + (pt.y - worldY) ** 2) < threshold) {
+          return e.id;
+        }
+      }
+    }
+    return null;
   }, []);
 
   // Zoom/reset via toolbar buttons
@@ -269,10 +310,11 @@ export function ConstellationCanvas({ data, scopeId, selectedId, macroMode, onNo
           (tgtNode?.type === 'person' || tgtNode?.type === 'elu');
         const edgeColor = relStyle ?? (isPersonEdge ? COLORS.personEdge : COLORS.edge);
 
+        const isHoveredEdge = st.hoverEdgeId === e.id;
         ctx.save();
         ctx.globalAlpha = isGhostEdge ? 0.55 : 0.9;
         ctx.strokeStyle = edgeColor.stroke;
-        ctx.lineWidth = relStyle ? 2 : 1.5;
+        ctx.lineWidth = isHoveredEdge ? (relStyle ? 3.5 : 3) : (relStyle ? 2 : 1.5);
         ctx.setLineDash([5, 6]);
         ctx.beginPath();
         ctx.moveTo(ox, oy);
@@ -620,10 +662,14 @@ export function ConstellationCanvas({ data, scopeId, selectedId, macroMode, onNo
       st.panY = st.dragStart.py + (e.clientY - st.dragStart.y);
       return;
     }
-    const hit = hitTest(e.clientX - rect.left, e.clientY - rect.top, canvas);
-    st.hoverNodeId = hit;
-    canvas.style.cursor = hit ? 'pointer' : 'grab';
-  }, [hitTest]);
+    const lx = e.clientX - rect.left;
+    const ly = e.clientY - rect.top;
+    const nodeHit = hitTest(lx, ly, canvas);
+    const edgeHit = nodeHit ? null : hitTestEdge(lx, ly, canvas);
+    st.hoverNodeId = nodeHit;
+    st.hoverEdgeId = edgeHit;
+    canvas.style.cursor = (nodeHit || edgeHit) ? 'pointer' : 'grab';
+  }, [hitTest, hitTestEdge]);
 
   const onMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const st = stRef.current;
@@ -641,10 +687,17 @@ export function ConstellationCanvas({ data, scopeId, selectedId, macroMode, onNo
     if (canvas) canvas.style.cursor = 'grab';
     if (!wasDragging && canvas) {
       const rect = canvas.getBoundingClientRect();
-      const hit = hitTest(e.clientX - rect.left, e.clientY - rect.top, canvas);
-      if (hit) onNodeClick(hit);
+      const lx = e.clientX - rect.left;
+      const ly = e.clientY - rect.top;
+      const nodeHit = hitTest(lx, ly, canvas);
+      if (nodeHit) {
+        onNodeClick(nodeHit);
+      } else {
+        const edgeHit = hitTestEdge(lx, ly, canvas);
+        if (edgeHit) onEdgeClick?.(edgeHit, e.clientX, e.clientY);
+      }
     }
-  }, [hitTest, onNodeClick]);
+  }, [hitTest, hitTestEdge, onNodeClick, onEdgeClick]);
 
   const onWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     const st = stRef.current;
@@ -653,6 +706,7 @@ export function ConstellationCanvas({ data, scopeId, selectedId, macroMode, onNo
 
   const onMouseLeave = useCallback(() => {
     stRef.current.hoverNodeId = null;
+    stRef.current.hoverEdgeId = null;
     stRef.current.dragStart = null;
   }, []);
 

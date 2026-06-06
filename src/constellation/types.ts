@@ -48,6 +48,7 @@ export interface EdgeData {
   targetId: string;
   label: string;
   relationType?: RelationType;
+  body?: string;
 }
 
 export interface ConstellationData {

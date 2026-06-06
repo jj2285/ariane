@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { ConstellationCanvas } from './ConstellationCanvas';
 import { InfoPanel } from './InfoPanel';
+import { EdgeTooltip } from './EdgeTooltip';
 import { Intro } from './Intro';
 import { AdminPanel } from './AdminPanel';
 import { Legend } from './Legend';
@@ -28,6 +29,7 @@ export function ConstellationApp() {
   const [introActive, setIntroActive] = useState(() => !isIntroDone());
   const [macroMode, setMacroMode] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [selectedEdge, setSelectedEdge] = useState<{ id: string; x: number; y: number } | null>(null);
 
   // Admin panel hidden by default — unlock with Ctrl+Shift+A
   useEffect(() => {
@@ -48,6 +50,7 @@ export function ConstellationApp() {
   const selectedHasChildren = !!selectedId && data.nodes.some(n => n.parentId === selectedId);
 
   const handleNodeClick = useCallback((id: string) => {
+    setSelectedEdge(null);
     setSelectedId(prev => (prev === id ? null : id));
   }, []);
 
@@ -92,7 +95,25 @@ export function ConstellationApp() {
         selectedId={selectedId}
         macroMode={macroMode}
         onNodeClick={handleNodeClick}
+        onEdgeClick={(id, x, y) => setSelectedEdge({ id, x, y })}
       />
+
+      {selectedEdge && (() => {
+        const edge = data.edges.find(e => e.id === selectedEdge.id);
+        if (!edge) return null;
+        const srcNode = data.nodes.find(n => n.id === edge.sourceId);
+        const tgtNode = data.nodes.find(n => n.id === edge.targetId);
+        return (
+          <EdgeTooltip
+            edge={edge}
+            sourceName={srcNode?.label ?? edge.sourceId}
+            targetName={tgtNode?.label ?? edge.targetId}
+            x={selectedEdge.x}
+            y={selectedEdge.y}
+            onClose={() => setSelectedEdge(null)}
+          />
+        );
+      })()}
 
       {activeNode && (
         <InfoPanel
