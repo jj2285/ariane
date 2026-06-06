@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';;
+import { useEffect, useState } from 'react';
 import type { RuntimeNode } from './types';
 
 interface Props {
@@ -56,11 +56,7 @@ export function InfoPanel({ node, onClose }: Props) {
         ×
       </button>
 
-      <div
-        key={animKey}
-        style={{ animation: 'fadeUp 0.35s ease both' }}
-      >
-        {/* Type badge */}
+      <div key={animKey} style={{ animation: 'fadeUp 0.35s ease both' }}>
         <span style={{
           fontSize: 10,
           fontWeight: 600,
@@ -114,11 +110,7 @@ export function InfoPanel({ node, onClose }: Props) {
             }}>
               {displayed.stat}
             </div>
-            <div style={{
-              fontSize: 11,
-              color: '#6b7280',
-              marginTop: 4,
-            }}>
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
               {displayed.statLabel}
             </div>
           </div>

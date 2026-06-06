@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';;
+import { useState, useCallback } from 'react';
 import { ConstellationCanvas } from './ConstellationCanvas';
 import { InfoPanel } from './InfoPanel';
 import { Intro } from './Intro';
@@ -44,7 +44,6 @@ export function ConstellationApp() {
       overflow: 'hidden',
       fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
-      {/* Canvas fills the whole space */}
       <ConstellationCanvas
         data={data}
         focusId={focusId}
@@ -53,12 +52,10 @@ export function ConstellationApp() {
         introStep={introStep}
       />
 
-      {/* Info panel */}
       {showInfo && activeNode && (
         <InfoPanel node={activeNode} onClose={handleClose} />
       )}
 
-      {/* Admin panel */}
       {showAdmin && (
         <AdminPanel
           data={data}
@@ -67,7 +64,6 @@ export function ConstellationApp() {
         />
       )}
 
-      {/* Top toolbar */}
       <div style={{
         position: 'absolute',
         top: 16,
@@ -93,10 +89,8 @@ export function ConstellationApp() {
         </span>
       </div>
 
-      {/* Zoom controls */}
       <ZoomControls />
 
-      {/* Admin toggle */}
       <button
         onClick={() => setShowAdmin(v => !v)}
         style={{
@@ -118,7 +112,6 @@ export function ConstellationApp() {
         {showAdmin ? '✕ Admin' : '⚙ Admin'}
       </button>
 
-      {/* Intro overlay */}
       {introActive && (
         <Intro
           nodeCount={data.nodes.length}
@@ -132,7 +125,6 @@ export function ConstellationApp() {
 }
 
 function ZoomControls() {
-  // Zoom state is inside canvas stRef — we wire buttons via custom events
   const zoom = (delta: number) => {
     const ev = new CustomEvent('constellation-zoom', { detail: delta });
     window.dispatchEvent(ev);

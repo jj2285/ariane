@@ -21,7 +21,6 @@ export function Intro({ nodeCount, edgeCount, pillarNames, onComplete }: Props) 
     onComplete();
   };
 
-  // Step 0 — typewriter
   useEffect(() => {
     if (step !== 0) return;
     const msg = 'INITIALISATION DU SYSTÈME…';
@@ -39,7 +38,6 @@ export function Intro({ nodeCount, edgeCount, pillarNames, onComplete }: Props) 
     return () => { clearInterval(iv); if (autoRef.current) clearTimeout(autoRef.current); };
   }, [step]);
 
-  // Step 1 — animated counters
   useEffect(() => {
     if (step !== 1) return;
     setCountersVal({ nodes: 0, edges: 0 });
@@ -61,7 +59,6 @@ export function Intro({ nodeCount, edgeCount, pillarNames, onComplete }: Props) 
     return () => { if (autoRef.current) clearTimeout(autoRef.current); };
   }, [step, nodeCount, edgeCount]);
 
-  // Step 2 — pillar list lighting up
   useEffect(() => {
     if (step !== 2) return;
     setVisibleLines([]);
@@ -77,14 +74,12 @@ export function Intro({ nodeCount, edgeCount, pillarNames, onComplete }: Props) 
     return () => { clearInterval(iv); if (autoRef.current) clearTimeout(autoRef.current); };
   }, [step, pillarNames]);
 
-  // Steps 3, 4 — auto-advance
   useEffect(() => {
     if (step !== 3 && step !== 4) return;
     autoRef.current = setTimeout(() => setStep(step + 1), 3200);
     return () => { if (autoRef.current) clearTimeout(autoRef.current); };
   }, [step]);
 
-  // Step 5 — complete after 2.1s
   useEffect(() => {
     if (step !== 5) return;
     autoRef.current = setTimeout(() => {
@@ -107,7 +102,6 @@ export function Intro({ nodeCount, edgeCount, pillarNames, onComplete }: Props) 
       transition: step === 5 ? 'background 1.5s ease' : undefined,
       pointerEvents: 'auto',
     }}>
-      {/* Skip button */}
       {step < 5 && (
         <button
           onClick={skip}
@@ -129,7 +123,6 @@ export function Intro({ nodeCount, edgeCount, pillarNames, onComplete }: Props) 
         </button>
       )}
 
-      {/* Step 0 */}
       {step === 0 && (
         <div style={{ textAlign: 'center' }}>
           <p style={{
@@ -158,25 +151,19 @@ export function Intro({ nodeCount, edgeCount, pillarNames, onComplete }: Props) 
         </div>
       )}
 
-      {/* Step 1 */}
       {step === 1 && (
         <div style={{ textAlign: 'center', animation: 'fadeUp 0.4s ease both' }}>
           <div style={{ display: 'flex', gap: 48, justifyContent: 'center', marginBottom: 16 }}>
             <Stat value={countersVal.nodes} label="nœuds" />
             <Stat value={countersVal.edges} label="connexions" />
           </div>
-          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 8 }}>
-            cartographie active
-          </p>
+          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 8 }}>cartographie active</p>
         </div>
       )}
 
-      {/* Step 2 */}
       {step === 2 && (
         <div style={{ textAlign: 'center', animation: 'fadeUp 0.4s ease both' }}>
-          <p style={{ color: '#34d399', fontSize: 11, letterSpacing: '0.1em', marginBottom: 16 }}>
-            4 PILIERS
-          </p>
+          <p style={{ color: '#34d399', fontSize: 11, letterSpacing: '0.1em', marginBottom: 16 }}>4 PILIERS</p>
           {pillarNames.map((name, i) => (
             <div key={name} style={{
               opacity: visibleLines.includes(i) ? 1 : 0,
@@ -192,12 +179,9 @@ export function Intro({ nodeCount, edgeCount, pillarNames, onComplete }: Props) 
         </div>
       )}
 
-      {/* Step 3 */}
       {step === 3 && (
         <div style={{ textAlign: 'center', maxWidth: 380, padding: '0 20px', animation: 'fadeUp 0.4s ease both' }}>
-          <p style={{ color: '#34d399', fontSize: 11, letterSpacing: '0.1em', marginBottom: 16 }}>
-            ARCHITECTURE
-          </p>
+          <p style={{ color: '#34d399', fontSize: 11, letterSpacing: '0.1em', marginBottom: 16 }}>ARCHITECTURE</p>
           <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: 14, lineHeight: 1.7 }}>
             Chaque pilier se ramifie en sous-systèmes.
             Cliquez sur un nœud pour explorer ses détails et voir ses connexions s'illuminer.
@@ -205,12 +189,9 @@ export function Intro({ nodeCount, edgeCount, pillarNames, onComplete }: Props) 
         </div>
       )}
 
-      {/* Step 4 */}
       {step === 4 && (
         <div style={{ textAlign: 'center', maxWidth: 380, padding: '0 20px', animation: 'fadeUp 0.4s ease both' }}>
-          <p style={{ color: '#34d399', fontSize: 11, letterSpacing: '0.1em', marginBottom: 16 }}>
-            INTERDÉPENDANCES
-          </p>
+          <p style={{ color: '#34d399', fontSize: 11, letterSpacing: '0.1em', marginBottom: 16 }}>INTERDÉPENDANCES</p>
           <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: 14, lineHeight: 1.7 }}>
             Les flèches en pointillés révèlent comment les souverainetés se conditionnent mutuellement.
             Aucune n'existe seule.
@@ -218,7 +199,6 @@ export function Intro({ nodeCount, edgeCount, pillarNames, onComplete }: Props) 
         </div>
       )}
 
-      {/* Step 5 */}
       {step === 5 && (
         <div style={{ textAlign: 'center', animation: 'fadeUp 0.4s ease both' }}>
           <p style={{
@@ -232,14 +212,8 @@ export function Intro({ nodeCount, edgeCount, pillarNames, onComplete }: Props) 
         </div>
       )}
 
-      {/* Step indicator */}
       {step < 5 && (
-        <div style={{
-          position: 'absolute',
-          bottom: 24,
-          display: 'flex',
-          gap: 8,
-        }}>
+        <div style={{ position: 'absolute', bottom: 24, display: 'flex', gap: 8 }}>
           {[0, 1, 2, 3, 4].map(i => (
             <div key={i} style={{
               width: 6,
