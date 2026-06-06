@@ -115,6 +115,8 @@ export function InfoPanel({ node, onClose }: Props) {
       </button>
 
       <div key={animKey} style={{ animation: 'fadeUp 0.35s ease both' }}>
+
+        {/* Badge type */}
         <span style={{
           fontSize: 10,
           fontWeight: 600,

@@ -596,4 +596,3 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
     />
   );
 }
-
