@@ -3,7 +3,7 @@ import { DEFAULT_DATA } from './defaultData';
 
 // Bump the version suffix whenever DEFAULT_DATA changes structurally so that
 // returning visitors load the fresh dataset instead of stale localStorage.
-const KEY = 'lpe_constellation_data_v3';
+const KEY = 'lpe_constellation_data_v4';
 
 export function loadData(): ConstellationData {
   try {

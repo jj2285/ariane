@@ -298,8 +298,8 @@ export function ConstellationCanvas({ data, scopeId, selectedId, macroMode, onNo
         ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
         ctx.fill();
 
-        // Label
-        const lpt = bezierPoint(0.5, ox, oy, cx, cy, tx, ty);
+        // Label — near arrowhead so direction is readable
+        const lpt = bezierPoint(0.68, ox, oy, cx, cy, tx, ty);
         ctx.fillStyle = edgeColor.label;
         ctx.font = '10px system-ui, sans-serif';
         ctx.textAlign = 'center';
