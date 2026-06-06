@@ -87,3 +87,66 @@ export function computeLayout(nodes: NodeData[], D: number): RuntimeNode[] {
 
   return result;
 }
+
+// ── Scoped "poupée russe" layout ───────────────────────────────────────────
+// Centers the view on `scopeId` and lays out only that node, its direct
+// children (ring 1) and grandchildren (ring 2). Everything else is hidden.
+export interface ScopedNode extends RuntimeNode {
+  level: number;          // 0 = scope center, 1 = child, 2 = grandchild
+  _hasChildren: boolean;  // true if this node can be drilled into further
+}
+
+export function computeScopedLayout(
+  nodes: NodeData[],
+  scopeId: string,
+  D: number,
+): ScopedNode[] {
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const childrenOf = new Map<string, NodeData[]>();
+  for (const n of nodes) {
+    if (n.parentId) {
+      if (!childrenOf.has(n.parentId)) childrenOf.set(n.parentId, []);
+      childrenOf.get(n.parentId)!.push(n);
+    }
+  }
+
+  const scope = byId.get(scopeId);
+  if (!scope) return [];
+
+  const R1 = D * 0.30;
+  const R2 = D * 0.52;
+  const GRAND_FAN = (28 * Math.PI) / 180; // half-spread of grandchildren
+
+  const out: ScopedNode[] = [];
+  const mk = (n: NodeData, x: number, y: number, level: number): ScopedNode => ({
+    ...n, x, y, level,
+    _hasChildren: (childrenOf.get(n.id)?.length ?? 0) > 0,
+    phase: Math.random() * Math.PI * 2,
+    visible: false, scale: 0, opacity: 0,
+  });
+
+  // Center
+  out.push(mk(scope, 0, 0, 0));
+
+  // Ring 1 — direct children (+ indie themes when at the hub)
+  let children = (childrenOf.get(scopeId) ?? []).slice();
+  if (scopeId === 'hub') {
+    children = children.concat(nodes.filter(n => n.type === 'indie'));
+  }
+  const c = Math.max(1, children.length);
+  children.forEach((child, i) => {
+    const angle = -Math.PI / 2 + (i / c) * Math.PI * 2;
+    out.push(mk(child, Math.cos(angle) * R1, Math.sin(angle) * R1, 1));
+
+    // Ring 2 — grandchildren fanned around their parent's angle
+    const gks = childrenOf.get(child.id) ?? [];
+    const g = gks.length;
+    gks.forEach((gk, j) => {
+      const offset = g === 1 ? 0 : (j - (g - 1) / 2) * ((GRAND_FAN * 2) / Math.max(1, g - 1));
+      const a = angle + offset;
+      out.push(mk(gk, Math.cos(a) * R2, Math.sin(a) * R2, 2));
+    });
+  });
+
+  return out;
+}

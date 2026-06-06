@@ -4,6 +4,8 @@ import type { RuntimeNode } from './types';
 interface Props {
   node: RuntimeNode | null;
   onClose: () => void;
+  hasChildren?: boolean;
+  onDrill?: () => void;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -65,7 +67,7 @@ function ContactRow({ icon, value, href }: { icon: string; value: string; href?:
   return content;
 }
 
-export function InfoPanel({ node, onClose }: Props) {
+export function InfoPanel({ node, onClose, hasChildren, onDrill }: Props) {
   const [displayed, setDisplayed] = useState<RuntimeNode | null>(null);
   const [animKey, setAnimKey] = useState(0);
 
@@ -283,6 +285,31 @@ export function InfoPanel({ node, onClose }: Props) {
               </a>
             )}
           </>
+        )}
+
+        {/* Plonger d'un niveau — poupée russe */}
+        {hasChildren && onDrill && (
+          <button
+            onClick={onDrill}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              width: '100%',
+              marginTop: 22,
+              padding: '10px 14px',
+              fontSize: 13,
+              fontWeight: 600,
+              color: '#fff',
+              background: colors.accent,
+              border: 'none',
+              borderRadius: 8,
+              cursor: 'pointer',
+            }}
+          >
+            Explorer ce niveau →
+          </button>
         )}
       </div>
     </div>

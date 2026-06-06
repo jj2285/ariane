@@ -1,25 +1,23 @@
 import { useRef, useEffect, useCallback } from 'react';
-import type { ConstellationData, RuntimeNode, RuntimeEdge } from './types';
-import { computeLayout } from './layout';
+import type { ConstellationData, RuntimeEdge } from './types';
+import { computeScopedLayout, type ScopedNode } from './layout';
 import { COLORS, NODE_RADIUS, RELATION_STYLES } from './colors';
 
 interface Props {
   data: ConstellationData;
-  focusId: string | null;
+  scopeId: string;
+  selectedId: string | null;
   onNodeClick: (id: string) => void;
-  introActive: boolean;
-  introStep: number;
 }
 
 interface State {
-  nodes: RuntimeNode[];
+  nodes: ScopedNode[];
   edges: RuntimeEdge[];
   zoom: number;
   panX: number;
   panY: number;
-  focusId: string | null;
-  introActive: boolean;
-  introStep: number;
+  scopeId: string;
+  selectedId: string | null;
   hubRotation: number;
   dragStart: { x: number; y: number; px: number; py: number } | null;
   hoverNodeId: string | null;
@@ -38,7 +36,7 @@ function bezierPoint(
   };
 }
 
-export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, introStep }: Props) {
+export function ConstellationCanvas({ data, scopeId, selectedId, onNodeClick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stRef = useRef<State>({
     nodes: [],
@@ -46,9 +44,8 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
     zoom: 1,
     panX: 0,
     panY: 0,
-    focusId: null,
-    introActive: true,
-    introStep: 0,
+    scopeId: 'hub',
+    selectedId: null,
     hubRotation: 0,
     dragStart: null,
     hoverNodeId: null,
@@ -59,62 +56,51 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
 
   // Sync props into state ref
   useEffect(() => {
-    stRef.current.focusId = focusId;
-    stRef.current.introActive = introActive;
-    stRef.current.introStep = introStep;
-  }, [focusId, introActive, introStep]);
+    stRef.current.selectedId = selectedId;
+  }, [selectedId]);
 
-  // Initialize / reinitialize when data changes
+  // Rebuild the scoped view whenever the data or current level changes.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const D = Math.min(canvas.offsetWidth, canvas.offsetHeight);
 
-    const rNodes = computeLayout(data.nodes, D);
-    // Staggered appear animation via setTimeout
+    const rNodes = computeScopedLayout(data.nodes, scopeId, D);
     rNodes.forEach(n => { n.visible = false; n.scale = 0; n.opacity = 0; });
 
-    const showAt = (ids: string[], delay: number) => {
+    stRef.current.scopeId = scopeId;
+    stRef.current.nodes = rNodes;
+    stRef.current.edges = data.edges.map(e => ({ ...e, visible: true, particleT: Math.random() }));
+
+    // Reset framing on every drill so the level is centered.
+    stRef.current.zoom = 1;
+    stRef.current.panX = 0;
+    stRef.current.panY = 0;
+
+    const showAt = (id: string, delay: number) => {
       setTimeout(() => {
-        ids.forEach(id => {
-          const n = stRef.current.nodes.find(x => x.id === id);
-          if (n) { n.visible = true; }
-        });
+        const n = stRef.current.nodes.find(x => x.id === id);
+        if (n) n.visible = true;
       }, delay);
     };
 
-    stRef.current.nodes = rNodes;
-    stRef.current.edges = data.edges.map(e => ({
-      ...e,
-      visible: true,
-      particleT: Math.random(),
-    }));
-
-    // Staggered reveal
-    showAt(['hub'], 360);
-    const pillars = rNodes.filter(n => n.type === 'pillar');
-    pillars.forEach((p, i) => showAt([p.id], 1150 + i * 65));
-    const subs = rNodes.filter(n => n.type === 'subtheme' || n.type === 'indie');
-    subs.forEach((s, i) => showAt([s.id], 1150 + pillars.length * 65 + 200 + i * 65));
-    const orgs = rNodes.filter(n => n.type === 'company' || n.type === 'institution');
-    const baseOrg = 1150 + pillars.length * 65 + 200 + subs.length * 65 + 300;
-    orgs.forEach((c, i) => showAt([c.id], baseOrg + i * 65));
-    const people = rNodes.filter(n => n.type === 'person' || n.type === 'elu');
-    const basePeople = baseOrg + orgs.length * 65 + 200;
-    people.forEach((p, i) => showAt([p.id], basePeople + i * 65));
-  }, [data]);
+    // Staggered reveal ring by ring.
+    rNodes.filter(n => n.level === 0).forEach(n => showAt(n.id, 60));
+    const ring1 = rNodes.filter(n => n.level === 1);
+    ring1.forEach((n, i) => showAt(n.id, 260 + i * 55));
+    const ring2 = rNodes.filter(n => n.level === 2);
+    ring2.forEach((n, i) => showAt(n.id, 260 + ring1.length * 55 + 180 + i * 35));
+  }, [data, scopeId]);
 
   const hitTest = useCallback((cx: number, cy: number, canvas: HTMLCanvasElement): string | null => {
     const st = stRef.current;
-    const dpr = window.devicePixelRatio || 1;
     const W = canvas.offsetWidth;
     const H = canvas.offsetHeight;
-    const worldX = (cx * dpr / dpr - W / 2 - st.panX) / st.zoom;
+    const worldX = (cx - W / 2 - st.panX) / st.zoom;
     const worldY = (cy - H / 2 - st.panY) / st.zoom;
 
     let best: string | null = null;
     let bestDist = Infinity;
-
     for (const n of st.nodes) {
       if (!n.visible) continue;
       const r = NODE_RADIUS[n.type] ?? 22;
@@ -129,7 +115,7 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
     return best;
   }, []);
 
-  // Zoom/reset via custom events (from toolbar buttons)
+  // Zoom/reset via toolbar buttons
   useEffect(() => {
     const onZoom = (e: Event) => {
       const delta = (e as CustomEvent<number>).detail;
@@ -142,27 +128,14 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
       st.panX = 0;
       st.panY = 0;
     };
-    const onCenter = (e: Event) => {
-      const id = (e as CustomEvent<string>).detail;
-      const st = stRef.current;
-      const n = st.nodes.find(x => x.id === id);
-      if (!n) return;
-      n.visible = true;
-      st.zoom = Math.max(st.zoom, 1.3);
-      st.panX = -n.x * st.zoom;
-      st.panY = -n.y * st.zoom;
-    };
     window.addEventListener('constellation-zoom', onZoom);
     window.addEventListener('constellation-reset', onReset);
-    window.addEventListener('constellation-center', onCenter);
     return () => {
       window.removeEventListener('constellation-zoom', onZoom);
       window.removeEventListener('constellation-reset', onReset);
-      window.removeEventListener('constellation-center', onCenter);
     };
   }, []);
 
-  // Draw loop
   const draw = useCallback((ts: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -172,152 +145,129 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
     const dpr = window.devicePixelRatio || 1;
     const W = canvas.offsetWidth;
     const H = canvas.offsetHeight;
-
     if (canvas.width !== W * dpr || canvas.height !== H * dpr) {
       canvas.width = W * dpr;
       canvas.height = H * dpr;
     }
-
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const st = stRef.current;
     const dt = Math.min(ts - prevTsRef.current, 50);
     prevTsRef.current = ts;
 
-    // Animate node scale/opacity
     for (const n of st.nodes) {
       const target = n.visible ? 1 : 0;
       n.scale += (target - n.scale) * 0.08;
       n.opacity += (target - n.opacity) * 0.08;
     }
-
-    // Hub slow rotation
     st.hubRotation += dt * 0.0003;
-
-    // Particle animation
     for (const e of st.edges) {
       e.particleT = (e.particleT + dt * 0.00025) % 1;
     }
 
-    // --- Background ---
+    // Background
     const grad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.7);
     grad.addColorStop(0, '#ffffff');
     grad.addColorStop(1, '#f0fdf4');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
-
-    // Halo
     const haloGrad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, H * 0.22);
     haloGrad.addColorStop(0, 'rgba(20,184,166,0.10)');
     haloGrad.addColorStop(1, 'rgba(20,184,166,0)');
     ctx.fillStyle = haloGrad;
     ctx.fillRect(0, 0, W, H);
 
-    // Transform to world space
     ctx.save();
     ctx.translate(W / 2 + st.panX, H / 2 + st.panY);
     ctx.scale(st.zoom, st.zoom);
 
-    // Build adjacency for focus
-    const focusId = st.focusId;
+    const visibleIds = new Set(st.nodes.map(n => n.id));
+    const selectedId = st.selectedId;
+
+    // Which nodes are "connected" to the selection (tree neighbours + relations).
     const connectedIds = new Set<string>();
-    if (focusId) {
-      connectedIds.add(focusId);
+    if (selectedId) {
+      connectedIds.add(selectedId);
+      const sel = st.nodes.find(n => n.id === selectedId);
+      if (sel?.parentId) connectedIds.add(sel.parentId);
+      for (const n of st.nodes) if (n.parentId === selectedId) connectedIds.add(n.id);
       for (const e of st.edges) {
-        if (e.sourceId === focusId || e.targetId === focusId) {
-          connectedIds.add(e.sourceId);
-          connectedIds.add(e.targetId);
-        }
-      }
-      // also include tree parent/children
-      for (const n of st.nodes) {
-        if (n.id === focusId) {
-          if (n.parentId) connectedIds.add(n.parentId);
-        }
-        if (n.parentId === focusId) connectedIds.add(n.id);
+        if (e.sourceId === selectedId) connectedIds.add(e.targetId);
+        if (e.targetId === selectedId) connectedIds.add(e.sourceId);
       }
     }
-
     const nodeOpacity = (id: string) => {
-      if (!focusId) return 1;
-      if (connectedIds.has(id)) return 1;
-      return COLORS.focus.dimOpacity;
+      if (!selectedId) return 1;
+      return connectedIds.has(id) ? 1 : COLORS.focus.dimOpacity;
     };
 
-    // --- Draw edges ---
-    for (const e of st.edges) {
-      const src = st.nodes.find(n => n.id === e.sourceId);
-      const tgt = st.nodes.find(n => n.id === e.targetId);
-      if (!src || !tgt || !src.visible || !tgt.visible) continue;
+    const find = (id: string) => st.nodes.find(n => n.id === id);
 
-      const ox = src.x + Math.sin(ts * 0.0004 + src.phase) * 3;
-      const oy = src.y + Math.cos(ts * 0.0004 + src.phase) * 3;
-      const tx = tgt.x + Math.sin(ts * 0.0004 + tgt.phase) * 3;
-      const ty = tgt.y + Math.cos(ts * 0.0004 + tgt.phase) * 3;
+    // ── Relationship edges — only for the selected node, both ends visible ──
+    if (selectedId) {
+      for (const e of st.edges) {
+        if (e.sourceId !== selectedId && e.targetId !== selectedId) continue;
+        if (!visibleIds.has(e.sourceId) || !visibleIds.has(e.targetId)) continue;
+        const src = find(e.sourceId);
+        const tgt = find(e.targetId);
+        if (!src || !tgt || !src.visible || !tgt.visible) continue;
 
-      const mx = (ox + tx) / 2;
-      const my = (oy + ty) / 2;
-      const perp = { x: -(ty - oy) * 0.25, y: (tx - ox) * 0.25 };
-      const cx = mx + perp.x;
-      const cy = my + perp.y;
+        const ox = src.x + Math.sin(ts * 0.0004 + src.phase) * 3;
+        const oy = src.y + Math.cos(ts * 0.0004 + src.phase) * 3;
+        const tx = tgt.x + Math.sin(ts * 0.0004 + tgt.phase) * 3;
+        const ty = tgt.y + Math.cos(ts * 0.0004 + tgt.phase) * 3;
+        const mx = (ox + tx) / 2;
+        const my = (oy + ty) / 2;
+        const cx = mx - (ty - oy) * 0.25;
+        const cy = my + (tx - ox) * 0.25;
 
-      const edgeOpacity = focusId
-        ? (connectedIds.has(e.sourceId) && connectedIds.has(e.targetId) ? 0.8 : 0.05)
-        : 0.4;
+        const relStyle = e.relationType ? RELATION_STYLES[e.relationType] : undefined;
+        const isPersonEdge = !relStyle &&
+          (src.type === 'person' || src.type === 'elu') &&
+          (tgt.type === 'person' || tgt.type === 'elu');
+        const edgeColor = relStyle ?? (isPersonEdge ? COLORS.personEdge : COLORS.edge);
 
-      const relStyle = e.relationType ? RELATION_STYLES[e.relationType] : undefined;
-      const isPersonEdge = !relStyle &&
-        (src.type === 'person' || src.type === 'elu') &&
-        (tgt.type === 'person' || tgt.type === 'elu');
-      const edgeColor = relStyle ?? (isPersonEdge ? COLORS.personEdge : COLORS.edge);
+        ctx.save();
+        ctx.globalAlpha = 0.9;
+        ctx.strokeStyle = edgeColor.stroke;
+        ctx.lineWidth = relStyle ? 2 : 1.5;
+        ctx.setLineDash([5, 6]);
+        ctx.beginPath();
+        ctx.moveTo(ox, oy);
+        ctx.quadraticCurveTo(cx, cy, tx, ty);
+        ctx.stroke();
+        ctx.setLineDash([]);
 
-      ctx.save();
-      ctx.globalAlpha = edgeOpacity;
-      ctx.strokeStyle = edgeColor.stroke;
-      ctx.lineWidth = relStyle ? 1.8 : isPersonEdge ? 1.2 : 1.5;
-      ctx.setLineDash([5, 6]);
-      ctx.beginPath();
-      ctx.moveTo(ox, oy);
-      ctx.quadraticCurveTo(cx, cy, tx, ty);
-      ctx.stroke();
-      ctx.setLineDash([]);
+        // Arrow at target
+        const p1 = bezierPoint(0.92, ox, oy, cx, cy, tx, ty);
+        const p2 = bezierPoint(0.97, ox, oy, cx, cy, tx, ty);
+        const ang = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(tx - 8 * Math.cos(ang - 0.4), ty - 8 * Math.sin(ang - 0.4));
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(tx - 8 * Math.cos(ang + 0.4), ty - 8 * Math.sin(ang + 0.4));
+        ctx.stroke();
 
-      // Arrow at target
-      const arrowT = 0.92;
-      const p1 = bezierPoint(arrowT, ox, oy, cx, cy, tx, ty);
-      const p2 = bezierPoint(arrowT + 0.05, ox, oy, cx, cy, tx, ty);
-      const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-      const aLen = 8;
-      ctx.strokeStyle = edgeColor.stroke;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(tx, ty);
-      ctx.lineTo(tx - aLen * Math.cos(angle - 0.4), ty - aLen * Math.sin(angle - 0.4));
-      ctx.moveTo(tx, ty);
-      ctx.lineTo(tx - aLen * Math.cos(angle + 0.4), ty - aLen * Math.sin(angle + 0.4));
-      ctx.stroke();
+        // Particle
+        const pt = bezierPoint(e.particleT, ox, oy, cx, cy, tx, ty);
+        ctx.fillStyle = edgeColor.particle;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+        ctx.fill();
 
-      // Particle
-      const pt = bezierPoint(e.particleT, ox, oy, cx, cy, tx, ty);
-      ctx.globalAlpha = edgeOpacity * 0.9;
-      ctx.fillStyle = edgeColor.particle;
-      ctx.beginPath();
-      ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Edge label at midpoint
-      const lpt = bezierPoint(0.45, ox, oy, cx, cy, tx, ty);
-      ctx.globalAlpha = edgeOpacity * 0.85;
-      ctx.fillStyle = edgeColor.label;
-      ctx.font = '9px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(e.label, lpt.x, lpt.y - 8);
-
-      ctx.restore();
+        // Label
+        const lpt = bezierPoint(0.5, ox, oy, cx, cy, tx, ty);
+        ctx.fillStyle = edgeColor.label;
+        ctx.font = '10px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(e.label, lpt.x, lpt.y - 8);
+        ctx.restore();
+      }
     }
 
-    // Hub–pillar lines (tree edges)
+    // ── Tree links — structure of the current level (always shown) ──────────
     const TREE_LINK_COLOR: Record<string, string> = {
       person: '#fb923c',
       elu: '#c084fc',
@@ -325,22 +275,20 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
       institution: '#94a3b8',
     };
     for (const n of st.nodes) {
-      if (n.type === 'hub' || n.type === 'pillar' || n.type === 'indie') continue;
-      if (!n.parentId) continue;
-      const parent = st.nodes.find(p => p.id === n.parentId);
+      if (n.level === 0) continue;
+      const parent = n.parentId ? find(n.parentId) : (n.type === 'indie' ? find(st.scopeId) : undefined);
       if (!parent || !parent.visible || !n.visible) continue;
 
       const px = parent.x + Math.sin(ts * 0.0004 + parent.phase) * 3;
       const py = parent.y + Math.cos(ts * 0.0004 + parent.phase) * 3;
       const nx = n.x + Math.sin(ts * 0.0004 + n.phase) * 3;
       const ny = n.y + Math.cos(ts * 0.0004 + n.phase) * 3;
-
       const op = Math.min(nodeOpacity(n.id), nodeOpacity(parent.id));
 
       ctx.save();
-      ctx.globalAlpha = op * 0.25 * n.opacity;
+      ctx.globalAlpha = op * 0.3 * n.opacity;
       ctx.strokeStyle = TREE_LINK_COLOR[n.type] ?? '#34d399';
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 1.4;
       ctx.beginPath();
       ctx.moveTo(px, py);
       ctx.lineTo(nx, ny);
@@ -348,43 +296,17 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
       ctx.restore();
     }
 
-    // Hub lines (hub to pillars)
-    const hub = st.nodes.find(n => n.type === 'hub');
-    if (hub) {
-      for (const n of st.nodes) {
-        if (n.type !== 'pillar') continue;
-        if (!n.visible) continue;
-        const nx = n.x + Math.sin(ts * 0.0004 + n.phase) * 3;
-        const ny = n.y + Math.cos(ts * 0.0004 + n.phase) * 3;
-        const op = Math.min(nodeOpacity('hub'), nodeOpacity(n.id));
-        ctx.save();
-        ctx.globalAlpha = op * 0.3 * n.opacity * hub.opacity;
-        ctx.strokeStyle = '#34d399';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(nx, ny);
-        ctx.stroke();
-        ctx.restore();
-      }
-    }
-
-    // --- Draw nodes ---
-    const sortedNodes = [...st.nodes].sort((a, b) => {
-      const order: Record<string, number> = { hub: 5, pillar: 4, subtheme: 3, indie: 3, institution: 2, company: 2, elu: 1, person: 1 };
-      return (order[a.type] ?? 0) - (order[b.type] ?? 0);
-    });
+    // ── Nodes ───────────────────────────────────────────────────────────────
+    const order: Record<string, number> = { hub: 5, pillar: 4, subtheme: 3, indie: 3, institution: 2, company: 2, elu: 1, person: 1 };
+    const sortedNodes = [...st.nodes].sort((a, b) => (order[a.type] ?? 0) - (order[b.type] ?? 0));
 
     for (const n of sortedNodes) {
       if (n.opacity < 0.01) continue;
-
       const r = (NODE_RADIUS[n.type] ?? 22) * n.scale;
       const ox = n.x + Math.sin(ts * 0.0004 + n.phase) * 3;
       const oy = n.y + Math.cos(ts * 0.0004 + n.phase) * 3;
-
       const isHovered = st.hoverNodeId === n.id;
-      const displayScale = isHovered || focusId === n.id ? 1.14 : 1;
-      const finalR = r * displayScale;
+      const finalR = r * (isHovered || selectedId === n.id ? 1.14 : 1);
       const op = nodeOpacity(n.id) * n.opacity;
 
       ctx.save();
@@ -392,7 +314,6 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
       ctx.translate(ox, oy);
 
       if (n.type === 'hub') {
-        // Hub: dark rotating circle
         ctx.save();
         ctx.rotate(st.hubRotation);
         const hGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, finalR);
@@ -402,14 +323,12 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
         ctx.beginPath();
         ctx.arc(0, 0, finalR, 0, Math.PI * 2);
         ctx.fill();
-        // Ring
         ctx.strokeStyle = COLORS.hubRing;
         ctx.lineWidth = 2;
         ctx.setLineDash([8, 5]);
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.restore();
-
         ctx.fillStyle = COLORS.hubText;
         ctx.font = `bold ${Math.round(finalR * 0.55)}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
@@ -427,7 +346,6 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
         ctx.strokeStyle = COLORS.pillar.stroke;
         ctx.lineWidth = 1.5;
         ctx.stroke();
-
         ctx.fillStyle = COLORS.pillar.text;
         ctx.font = `600 ${Math.round(finalR * 0.38)}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
@@ -436,9 +354,7 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
         if (words.length > 1) {
           ctx.fillText(words[0], 0, -finalR * 0.18);
           ctx.fillText(words.slice(1).join(' '), 0, finalR * 0.18);
-        } else {
-          ctx.fillText(n.label, 0, 0);
-        }
+        } else ctx.fillText(n.label, 0, 0);
 
       } else if (n.type === 'indie') {
         ctx.fillStyle = '#f0fdf4';
@@ -450,7 +366,6 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
         ctx.setLineDash([4, 3]);
         ctx.stroke();
         ctx.setLineDash([]);
-
         ctx.fillStyle = '#166534';
         ctx.font = `500 ${Math.round(finalR * 0.36)}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
@@ -459,12 +374,9 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
         if (words.length > 1) {
           ctx.fillText(words[0], 0, -finalR * 0.18);
           ctx.fillText(words.slice(1).join(' '), 0, finalR * 0.18);
-        } else {
-          ctx.fillText(n.label, 0, 0);
-        }
+        } else ctx.fillText(n.label, 0, 0);
 
       } else if (n.type === 'company') {
-        // Company: rounded rect style with blue tones
         ctx.fillStyle = COLORS.company.fill;
         ctx.beginPath();
         ctx.arc(0, 0, finalR, 0, Math.PI * 2);
@@ -472,26 +384,20 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
         ctx.strokeStyle = COLORS.company.stroke;
         ctx.lineWidth = 2;
         ctx.stroke();
-
-        // Small building icon hint (2 rectangles)
         ctx.fillStyle = COLORS.company.stroke;
         ctx.fillRect(-finalR * 0.22, -finalR * 0.1, finalR * 0.18, finalR * 0.25);
         ctx.fillRect(finalR * 0.04, -finalR * 0.2, finalR * 0.22, finalR * 0.35);
-
         ctx.fillStyle = COLORS.company.text;
         ctx.font = `700 ${Math.round(finalR * 0.32)}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        const cWords = n.label.split(' ');
-        if (cWords.length > 1) {
-          ctx.fillText(cWords[0], 0, -finalR * 0.55);
-          ctx.fillText(cWords.slice(1).join(' '), 0, -finalR * 0.3);
-        } else {
-          ctx.fillText(n.label, 0, -finalR * 0.45);
-        }
+        const w = n.label.split(' ');
+        if (w.length > 1) {
+          ctx.fillText(w[0], 0, -finalR * 0.55);
+          ctx.fillText(w.slice(1).join(' '), 0, -finalR * 0.3);
+        } else ctx.fillText(n.label, 0, -finalR * 0.45);
 
       } else if (n.type === 'person') {
-        // Person: circle with initials
         ctx.fillStyle = COLORS.person.fill;
         ctx.beginPath();
         ctx.arc(0, 0, finalR, 0, Math.PI * 2);
@@ -499,12 +405,8 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
         ctx.strokeStyle = COLORS.person.stroke;
         ctx.lineWidth = 2;
         ctx.stroke();
-
-        // Initials
         const parts = n.title.split(' ');
-        const initials = parts.length >= 2
-          ? (parts[0][0] + parts[1][0]).toUpperCase()
-          : n.title.slice(0, 2).toUpperCase();
+        const initials = parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : n.title.slice(0, 2).toUpperCase();
         ctx.fillStyle = COLORS.person.initials;
         ctx.font = `700 ${Math.round(finalR * 0.52)}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
@@ -512,7 +414,6 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
         ctx.fillText(initials, 0, 0);
 
       } else if (n.type === 'elu') {
-        // Élu / Député: purple circle with initials
         ctx.fillStyle = COLORS.elu.fill;
         ctx.beginPath();
         ctx.arc(0, 0, finalR, 0, Math.PI * 2);
@@ -520,11 +421,8 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
         ctx.strokeStyle = COLORS.elu.stroke;
         ctx.lineWidth = 2;
         ctx.stroke();
-
         const parts = n.title.split(' ');
-        const initials = parts.length >= 2
-          ? (parts[0][0] + parts[1][0]).toUpperCase()
-          : n.title.slice(0, 2).toUpperCase();
+        const initials = parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : n.title.slice(0, 2).toUpperCase();
         ctx.fillStyle = COLORS.elu.initials;
         ctx.font = `700 ${Math.round(finalR * 0.5)}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
@@ -532,7 +430,6 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
         ctx.fillText(initials, 0, 0);
 
       } else if (n.type === 'institution') {
-        // Institution: slate rounded square (distinct shape from circles)
         const s = finalR * 0.92;
         const rad = finalR * 0.28;
         ctx.fillStyle = COLORS.institution.fill;
@@ -547,18 +444,15 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-
         ctx.fillStyle = COLORS.institution.text;
         ctx.font = `600 ${Math.round(finalR * 0.34)}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        const iWords = n.label.split(' ');
-        if (iWords.length > 1) {
-          ctx.fillText(iWords[0], 0, -finalR * 0.18);
-          ctx.fillText(iWords.slice(1).join(' '), 0, finalR * 0.18);
-        } else {
-          ctx.fillText(n.label, 0, 0);
-        }
+        const w = n.label.split(' ');
+        if (w.length > 1) {
+          ctx.fillText(w[0], 0, -finalR * 0.18);
+          ctx.fillText(w.slice(1).join(' '), 0, finalR * 0.18);
+        } else ctx.fillText(n.label, 0, 0);
 
       } else {
         // subtheme
@@ -569,15 +463,13 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
         ctx.strokeStyle = COLORS.subtheme.stroke;
         ctx.lineWidth = 1.2;
         ctx.stroke();
-
         ctx.fillStyle = COLORS.subtheme.text;
         ctx.font = `500 ${Math.round(finalR * 0.38)}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         const words = n.label.split(' ');
-        if (words.length === 1) {
-          ctx.fillText(n.label, 0, 0);
-        } else if (words.length === 2) {
+        if (words.length === 1) ctx.fillText(n.label, 0, 0);
+        else if (words.length === 2) {
           ctx.fillText(words[0], 0, -finalR * 0.2);
           ctx.fillText(words[1], 0, finalR * 0.2);
         } else {
@@ -587,11 +479,22 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
         }
       }
 
+      // "Plonger" hint ring for nodes that have a deeper level
+      if (n.level >= 1 && n._hasChildren && st.hoverNodeId === n.id) {
+        ctx.globalAlpha = op * 0.5;
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([2, 3]);
+        ctx.beginPath();
+        ctx.arc(0, 0, finalR + 6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
       ctx.restore();
     }
 
-    ctx.restore(); // world transform
-
+    ctx.restore();
     rafRef.current = requestAnimationFrame(frameRef.current!);
   }, []);
 
@@ -610,17 +513,13 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
-
     const st = stRef.current;
     if (st.dragStart) {
       st.panX = st.dragStart.px + (e.clientX - st.dragStart.x);
       st.panY = st.dragStart.py + (e.clientY - st.dragStart.y);
       return;
     }
-
-    const hit = hitTest(cx, cy, canvas);
+    const hit = hitTest(e.clientX - rect.left, e.clientY - rect.top, canvas);
     st.hoverNodeId = hit;
     canvas.style.cursor = hit ? 'pointer' : 'grab';
   }, [hitTest]);
@@ -639,7 +538,6 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
     st.dragStart = null;
     const canvas = canvasRef.current;
     if (canvas) canvas.style.cursor = 'grab';
-
     if (!wasDragging && canvas) {
       const rect = canvas.getBoundingClientRect();
       const hit = hitTest(e.clientX - rect.left, e.clientY - rect.top, canvas);
@@ -648,10 +546,8 @@ export function ConstellationCanvas({ data, focusId, onNodeClick, introActive, i
   }, [hitTest, onNodeClick]);
 
   const onWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
     const st = stRef.current;
-    const factor = e.deltaY < 0 ? 1.1 : 0.9;
-    st.zoom = Math.min(2.2, Math.max(0.6, st.zoom * factor));
+    st.zoom = Math.min(2.2, Math.max(0.6, st.zoom * (e.deltaY < 0 ? 1.1 : 0.9)));
   }, []);
 
   const onMouseLeave = useCallback(() => {
