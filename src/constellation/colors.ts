@@ -52,7 +52,7 @@ export const COLORS = {
     label: 'rgba(251,146,60,0.75)',
   },
   focus: {
-    dimOpacity: 0.12,
+    dimOpacity: 0.42,
   },
   halo: 'rgba(20,184,166,0.08)',
 };

@@ -8,6 +8,9 @@ import { Legend } from './Legend';
 import { SearchBar } from './SearchBar';
 import type { ConstellationData, NodeData, RuntimeNode } from './types';
 import { loadData, isIntroDone } from './storage';
+import { PITCH_DATA } from './pitchData';
+
+const isPitch = new URLSearchParams(window.location.search).has('pitch');
 
 // Path from the hub down to the given node (for the breadcrumb).
 function pathTo(nodes: NodeData[], id: string): NodeData[] {
@@ -22,11 +25,11 @@ function pathTo(nodes: NodeData[], id: string): NodeData[] {
 }
 
 export function ConstellationApp() {
-  const [data, setData] = useState<ConstellationData>(() => loadData());
+  const [data, setData] = useState<ConstellationData>(() => isPitch ? PITCH_DATA : loadData());
   const [scopeId, setScopeId] = useState<string>('hub');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(isPitch ? 'c-sanofi' : null);
   const [showAdmin, setShowAdmin] = useState(false);
-  const [introActive, setIntroActive] = useState(() => !isIntroDone());
+  const [introActive, setIntroActive] = useState(() => isPitch ? false : !isIntroDone());
   const [macroMode, setMacroMode] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [selectedEdge, setSelectedEdge] = useState<{ id: string; x: number; y: number } | null>(null);
