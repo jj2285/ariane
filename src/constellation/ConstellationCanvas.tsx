@@ -413,11 +413,7 @@ export function ConstellationCanvas({ data, scopeId, selectedId, macroMode, onNo
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.restore();
-        ctx.fillStyle = COLORS.hubText;
-        ctx.font = `bold ${Math.round(finalR * 0.55)}px system-ui, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('LPE', 0, 0);
+        // No label inside hub — pure decorative circle
 
       } else if (n.type === 'pillar') {
         const pGrad = ctx.createRadialGradient(0, -finalR * 0.2, 0, 0, 0, finalR);

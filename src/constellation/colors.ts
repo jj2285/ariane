@@ -58,14 +58,14 @@ export const COLORS = {
 };
 
 export const NODE_RADIUS: Record<string, number> = {
-  hub: 40,
-  pillar: 30,
-  subtheme: 22,
-  indie: 24,
-  company: 26,
-  person: 18,
-  elu: 19,
-  institution: 25,
+  hub: 54,
+  pillar: 40,
+  subtheme: 28,
+  indie: 30,
+  company: 34,
+  person: 24,
+  elu: 24,
+  institution: 32,
 };
 
 // Human-readable labels per node type (for legend + panels).
